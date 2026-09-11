@@ -24,7 +24,6 @@ let lastSubmitted='';
 let lastPartial='';
 let wakeArmed=false;
 let speaking=false;
-let restarting=false;
 let currentTtsText='';
 let pendingUtterances=[];
 
@@ -73,38 +72,31 @@ function isEcho(text){
 }
 
 async function ensureListening(delay=80){
- if(!active||listening||restarting)return;
+ if(!active||listening)return;
 
  clearTimeout(restartTimer);
 
  restartTimer=setTimeout(async()=>{
-  if(!active||listening||restarting)return;
+  if(!active||listening)return;
 
-  restarting=true;
 
   try{
    progress('STT: RESTART');
    await startListening('hi-IN');
   }catch(e){
    progress('STT: RESTART_FAILED '+String(e?.message||e));
-  }finally{
-   restarting=false;
   }
  },delay);
 }
 
 async function startListeningImmediately(){
- if(!active||listening||restarting)return;
-
- restarting=true;
+ if(!active||listening)return;
 
  try{
   progress('STT: PARALLEL_START');
   await startListening('hi-IN');
  }catch(e){
   progress('STT: PARALLEL_START_FAILED '+String(e?.message||e));
- }finally{
-  restarting=false;
  }
 }
 
@@ -333,8 +325,7 @@ export async function startAssistant(nextMode='fix'){
  processing=false;
  listening=false;
  speaking=false;
- restarting=false;
- currentTtsText='';
+  currentTtsText='';
  lastSubmitted='';
  lastPartial='';
  confirmationResolver=null;
@@ -366,7 +357,6 @@ export async function startAssistant(nextMode='fix'){
 
   if(e.event==='start'){
    listening=true;
-   restarting=false;
    progress('STT: LISTENING');
    return;
   }
@@ -515,8 +505,7 @@ export async function stopAssistant(){
  processing=false;
  listening=false;
  speaking=false;
- restarting=false;
- currentTtsText='';
+  currentTtsText='';
  confirmationResolver=null;
  pendingUtterances=[];
 
