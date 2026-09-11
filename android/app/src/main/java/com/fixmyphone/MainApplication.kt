@@ -55,10 +55,22 @@ class MainApplication : Application(), ReactApplication {
         }
 
     override fun onCreate() {
+        StartupCrashLogger.install(this)
+        StartupCrashLogger.setStage("Application.onCreate: entered")
+
         super.onCreate()
+
+        StartupCrashLogger.setStage("SoLoader: starting")
         SoLoader.init(this, false)
+        StartupCrashLogger.setStage("SoLoader: OK")
+
+        StartupCrashLogger.setStage("Registering AccessibilityActionHandler")
         ActionDispatcher.registerHandler(AccessibilityActionHandler())
+
+        StartupCrashLogger.setStage("Registering DeviceActionHandler")
         ActionDispatcher.registerHandler(DeviceActionHandler(this))
+
+        StartupCrashLogger.setStage("Application.onCreate: complete")
     }
 
 }
