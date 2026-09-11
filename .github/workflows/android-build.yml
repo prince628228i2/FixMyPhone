@@ -30,6 +30,9 @@ jobs:
           gradle-version: 8.6
       - name: Build debug APK
         run: cd android && gradle --no-daemon assembleDebug
+      - name: Build release APK
+        run: cd android && gradle --no-daemon assembleRelease
+
       - name: Build release AAB
         run: cd android && gradle --no-daemon bundleRelease
       - uses: actions/upload-artifact@v4
@@ -37,4 +40,5 @@ jobs:
           name: fixmyphone-android
           path: |
             android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/*.aab
