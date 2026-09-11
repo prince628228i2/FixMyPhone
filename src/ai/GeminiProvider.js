@@ -1,0 +1,11 @@
+const URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+function extract(text){const a=String(text).replace(/```json|```/g,'').trim(); const s=a.indexOf('{'),e=a.lastIndexOf('}'); return JSON.parse(a.slice(s,e+1));}
+export class GeminiProvider {
+ constructor(key){this.key=key}
+ async plan({goal,snapshot,conversation,actions}) {
+  if(!this.key) throw new Error('Gemini API key is not configured');
+  const prompt=`Return JSON only. You are a female-voice phone assistant. Understand the user's request, inspect the current screen, and solve the problem with the fewest necessary actions. Infer obvious details; ask ONLY a necessary question when execution genuinely cannot continue without it. Do not ask for information already visible on screen or safely inferable. If a question is necessary, return actions:[] and needsUserInput:true with a short Hindi/Hinglish assistantReply. Otherwise needsUserInput:false. Be conversational but concise. Available actions: ${JSON.stringify(actions)}. Current screen: ${JSON.stringify(snapshot).slice(0,12000)}. Conversation: ${JSON.stringify(conversation||{}).slice(0,5000)}. Goal: ${goal}. Schema: {"type":"ACTION_PLAN","goal":string,"assistantReply":string,"needsUserInput":boolean,"actions":[{"id":string,"action":string,"params":object,"requiresConfirmation":boolean}]}. Never invent actions. CALL must require confirmation.`;
+  const r=await fetch(`${URL}?key=${encodeURIComponent(this.key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.1,responseMimeType:'application/json'}})});
+  if(!r.ok) throw new Error(`Gemini HTTP ${r.status}`); const j=await r.json(); return extract(j.candidates?.[0]?.content?.parts?.[0]?.text||'{}');
+ }
+}

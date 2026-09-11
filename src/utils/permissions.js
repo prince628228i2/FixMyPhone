@@ -1,0 +1,2 @@
+import {PermissionsAndroid,Platform} from 'react-native';
+export async function requestCorePermissions(){if(Platform.OS!=='android')return true; const p=[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,PermissionsAndroid.PERMISSIONS.READ_CONTACTS,PermissionsAndroid.PERMISSIONS.CALL_PHONE]; const r=await PermissionsAndroid.requestMultiple(p); return Object.values(r).every(x=>x===PermissionsAndroid.RESULTS.GRANTED);}

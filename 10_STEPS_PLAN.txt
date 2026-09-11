@@ -1,0 +1,84 @@
+FIX MY PHONE - 10 PART BUILD PLAN
+==================================
+
+PART 1 - ARCHITECTURE & PLANNING [DONE]
+- Final architecture diagram
+- Complete directory tree
+- Dependencies list
+- Android permissions list
+- Native modules required
+- React Native modules required
+- AI action schema (design)
+- Agent state machine (design)
+- GitHub Actions build strategy
+File: ARCHITECTURE.md
+
+PART 2 - PROJECT FOUNDATION [DONE]
+- package.json, babel.config.js, metro.config.js
+- android/settings.gradle, android/build.gradle, android/gradle.properties
+- android/app/build.gradle
+- android/app/src/main/AndroidManifest.xml
+- MainApplication.kt, MainActivity.kt
+- App.jsx, index.js, app.json
+- ActionSchema.js (JS) + ActionSchema.kt (Kotlin) - kept 1:1
+
+PART 3 - ACCESSIBILITY SERVICE [DONE]
+- FixMyPhoneAccessibilityService.kt (core service, event listener)
+- NodeInspector.kt (reads UI hierarchy: text, bounds, clickable, editable, etc.)
+- NodeActionExecutor.kt (tap, long-press, swipe, scroll, type text, global actions)
+- AccessibilityBridgeModule.kt (exposes above to JS via NativeModule)
+- accessibility_service_config.xml
+- Permission-explanation screen copy (why Accessibility is needed)
+
+PART 4 - ACTION VALIDATOR + DISPATCHER [DONE]
+- ActionValidator.js and ActionValidator.kt (schema enforcement both sides)
+- ActionDispatcher.kt (routes validated action to correct native module)
+- ActionRegistry.js (JS-side action -> handler map)
+- Confirmation flow for ALWAYS_CONFIRM actions (e.g. CALL)
+
+PART 5 - AGENT ENGINE (STATE MACHINE) [DONE]
+- AgentState.js (zustand store: task, status, retries, timeouts, stop flag)
+- Planner.js (calls AIProvider, gets ACTION_PLAN)
+- Observer.js (reads current screen/device state)
+- Verifier.js (checks if action succeeded)
+- AgentEngine.js (ties OBSERVE -> THINK -> ACT -> OBSERVE -> VERIFY -> loop)
+- Guardrails: maxActions, maxRetries, timeoutMs, emergency stop check
+
+PART 6 - VOICE + FAST PATH [DONE]
+- SpeechToTextModule.kt (Android SpeechRecognizer wrapper)
+- TextToSpeechModule.kt (Android TextToSpeech wrapper)
+- VoiceInputManager.js (mic control, listening state)
+- FastCommandResolver.js (regex/rule based -> skips AI for simple commands)
+- ConversationContext.js (tracks "it" = active call/app, etc.)
+
+PART 7 - DEVICE MODULES [DONE]
+- TelephonyModule.kt (call, speakerphone, call state)
+- ContactsModule.kt (search/resolve contacts, handle ambiguous matches)
+- ConnectivityModule.kt (wifi/mobile data/airplane mode read+toggle)
+- MediaControlModule.kt (play/pause/seek via MediaSessionManager)
+- VolumeModule.kt (get/set stream volume)
+- AppLauncherModule.kt (resolve app name -> launch intent)
+
+PART 8 - AI PROVIDER + SAFETY [DONE]
+- AIProvider.js (common interface)
+- GeminiProvider.js, OpenAIProvider.js, ProviderFactory.js
+- Secure key storage (EncryptedSharedPreferences via security-crypto)
+- EmergencyStopManager.kt (cancel task/service/pending actions)
+- ActionGuardRails.kt (native-side safety checks before execution)
+
+PART 9 - UI SCREENS + CI/CD [DONE]
+- HomeScreen.jsx (Phone Fix / 24x7 CMD buttons, mic indicator, stop button)
+- PhoneFixScreen.jsx, CmdModeScreen.jsx, SettingsScreen.jsx
+- StatusIndicator.jsx, StopButton.jsx, TranscriptView.jsx
+- .github/workflows/android-build.yml (GitHub Actions build pipeline)
+
+PART 10 - PLAY STORE READINESS [DONE]
+- Privacy policy text draft
+- Data Safety form mapping (what data, why, shared or not)
+- Accessibility Service disclosure text (required by Play policy)
+- Release checklist (signing, target SDK, AAB, testing)
+- Final README.md with setup + build instructions
+
+==================================
+STATUS: Parts 1-10 implemented in this package.
+NEXT: Device testing, production hardening, signing, and Play Console submission.
