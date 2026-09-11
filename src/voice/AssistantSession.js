@@ -12,16 +12,21 @@ let active=false;
 let mode='fix';
 let processing=false;
 let listening=false;
-let queue=[];
 let unsub=null;
 let restartTimer=null;
-let partialTimer=null;
+let acknowledgementTimer=null;
 let confirmationResolver=null;
 let lastSubmitted='';
 let lastPartial='';
-
 let wakeArmed=false;
+let speaking=false;
+let restarting=false;
+
 const WAKE_WORD=/\bedith\b/i;
+
+function normalize(text){
+ return String(text||'').trim().replace(/\s+/g,' ').toLowerCase();
+}
 
 function extractWakeCommand(text){
  const raw=String(text||'').trim();
@@ -49,34 +54,53 @@ function isSmallTalk(text){
  return /^(ok|okay|haan|ha|yes|no|nahi|theek|thik|hmm|samajh gaya|samajh gayi|ji|achha|accha|right|fine|thank you|thanks)[.!\s]*$/i.test(String(text||'').trim());
 }
 
-async function restartListening(delay=80){
- if(!active||processing&&!confirmationResolver)return;
+async function ensureListening(delay=100){
+ if(!active||speaking||listening||restarting)return;
+
  clearTimeout(restartTimer);
  restartTimer=setTimeout(async()=>{
-  if(!active)return;
+  if(!active||speaking||listening||restarting)return;
+
+  restarting=true;
   try{
    await startListening('hi-IN');
-   listening=true;
   }catch(e){
-   listening=false;
    console.warn('[FixMyPhone][STT] restart failed:',String(e?.message||e));
+  }finally{
+   restarting=false;
   }
  },delay);
 }
 
 async function say(text){
  if(!text||!active)return;
- clearTimeout(partialTimer);
- await stopListening();
- listening=false;
+
+ clearTimeout(acknowledgementTimer);
+ speaking=true;
+
  console.log('[FixMyPhone][TTS]',text);
- try{await speak(text);}
- catch(e){console.warn('[FixMyPhone][TTS] failed:',String(e?.message||e));}
- if(active)await restartListening(80);
+
+ try{
+  await speak(text);
+ }catch(e){
+  console.warn('[FixMyPhone][TTS] failed:',String(e?.message||e));
+ }
+
+ speaking=false;
+
+ if(active){
+  await ensureListening(100);
+ }
 }
 
-function normalize(text){
- return String(text||'').trim().replace(/\s+/g,' ').toLowerCase();
+async function acknowledge(){
+ const replies=[
+  'Thik hai Sir.',
+  'Samajh gayi Sir.',
+  'Haan Sir.',
+  'Ji Sir, samajh gayi.'
+ ];
+ return replies[Math.floor(Math.random()*replies.length)];
 }
 
 async function processUtterance(text){
@@ -84,7 +108,7 @@ async function processUtterance(text){
  if(!goal||!active)return;
 
  const key=normalize(goal);
- if(key===lastSubmitted)return;
+ if(!key||key===lastSubmitted)return;
  lastSubmitted=key;
 
  if(confirmationResolver){
@@ -94,6 +118,7 @@ async function processUtterance(text){
    r(true);
    return;
   }
+
   if(isNo(goal)){
    const r=confirmationResolver;
    confirmationResolver=null;
@@ -108,12 +133,20 @@ async function processUtterance(text){
  }
 
  processing=true;
+
  ConversationContext.set({lastUserUtterance:goal});
+
  useAgentStore.getState().addTranscript({
   role:'user',
   text:goal,
   at:Date.now()
  });
+
+ /*
+  * User input milte hi short acknowledgement.
+  * Iske baad AgentEngine immediately start hota hai.
+  */
+ await say(await acknowledge());
 
  try{
   const result=await runAgent(goal,{
@@ -123,7 +156,9 @@ async function processUtterance(text){
     const answer=new Promise(resolve=>{
      confirmationResolver=resolve;
     });
+
     await say('Sir, is action ki permission hai? Haan ya nahi.');
+
     return await answer;
    },
 
@@ -134,6 +169,7 @@ async function processUtterance(text){
       text:reply,
       at:Date.now()
      });
+
      await say(reply);
     }
    }
@@ -145,27 +181,35 @@ async function processUtterance(text){
      ? 'Ho gaya Sir. Main yahin hoon.'
      : 'Ho gaya Sir.'
    );
+
    if(mode==='fix'){
     await stopAssistant();
     return;
    }
-  }else if(result.status==='needs_input'&&!result.assistantReply){
+  }
+
+  if(result.status==='needs_input'&&!result.assistantReply){
    await say('Sir, ek chhoti si information chahiye.');
-  }else if(result.status==='failed'){
+  }
+
+  if(result.status==='failed'){
    await say('Sir, main screen dobara check karke try karti hoon.');
   }
+
  }catch(e){
-  console.warn('[FixMyPhone][AGENT] error:',String(e?.message||e));
+  console.warn(
+   '[FixMyPhone][AGENT] error:',
+   String(e?.message||e)
+  );
+
   await say('Sir, ek problem aa gayi. Main dobara try karti hoon.');
+
  }finally{
   processing=false;
+
   if(active&&!confirmationResolver){
-   if(queue.length){
-    const next=queue.shift();
-    await processUtterance(next);
-   }else{
-    await restartListening(80);
-   }
+   lastSubmitted='';
+   await ensureListening(100);
   }
  }
 }
@@ -174,6 +218,7 @@ export async function startAssistant(nextMode='fix'){
  if(active)return;
 
  const micGranted=await requestMicrophonePermission();
+
  if(!micGranted){
   throw new Error('Microphone permission is required for voice assistant.');
  }
@@ -183,13 +228,14 @@ export async function startAssistant(nextMode='fix'){
  wakeArmed=(nextMode==='24x7');
  processing=false;
  listening=false;
- queue=[];
+ speaking=false;
+ restarting=false;
  lastSubmitted='';
  lastPartial='';
  confirmationResolver=null;
 
  clearTimeout(restartTimer);
- clearTimeout(partialTimer);
+ clearTimeout(acknowledgementTimer);
 
  ConversationContext.clear();
  useAgentStore.getState().reset();
@@ -205,74 +251,115 @@ export async function startAssistant(nextMode='fix'){
  unsub=subscribeVoiceEvents(async e=>{
   if(!active)return;
 
-  console.log('[FixMyPhone][STT EVENT]',JSON.stringify(e));
+  console.log(
+   '[FixMyPhone][STT EVENT]',
+   JSON.stringify(e)
+  );
 
   if(e.event==='start'){
    listening=true;
+   restarting=false;
    return;
   }
 
   if(e.event==='end'){
    listening=false;
-   if(active&&!processing)await restartListening(60);
+
+   /*
+    * Android recognition session ended naturally.
+    * Mic service remains active; only recognition session
+    * is silently re-armed.
+    */
+   if(active&&!speaking){
+    await ensureListening(100);
+   }
+
    return;
   }
 
   if(e.event==='error'){
    listening=false;
-   console.warn('[FixMyPhone][STT ERROR]',e.text||'unknown');
-   if(active)await restartListening(120);
+
+   console.warn(
+    '[FixMyPhone][STT ERROR]',
+    e.text||'unknown'
+   );
+
+   if(active&&!speaking){
+    await ensureListening(180);
+   }
+
    return;
   }
 
   if(e.event==='partial'&&e.text){
    const raw=String(e.text).trim();
-   if(!raw||normalize(raw)===lastPartial)return;
-   lastPartial=normalize(raw);
+   const normalized=normalize(raw);
+
+   if(!normalized||normalized===lastPartial)return;
+
+   lastPartial=normalized;
 
    if(mode==='24x7'&&wakeArmed){
     const command=extractWakeCommand(raw);
+
     if(command){
-     clearTimeout(partialTimer);
-     partialTimer=setTimeout(()=>{
-      if(active&&!processing)processUtterance(command);
-     },180);
+     clearTimeout(acknowledgementTimer);
+
+     acknowledgementTimer=setTimeout(()=>{
+      if(active&&!processing){
+       processUtterance(command);
+      }
+     },120);
     }
    }
+
    return;
   }
 
   if(e.event==='results'&&e.text){
    const raw=String(e.text).trim();
+
    if(!raw)return;
 
-   clearTimeout(partialTimer);
+   clearTimeout(acknowledgementTimer);
 
+   /*
+    * Confirmation gets priority.
+    */
    if(confirmationResolver){
     await processUtterance(raw);
     return;
    }
 
+   /*
+    * 24x7 requires Edith wake word.
+    */
    if(mode==='24x7'&&wakeArmed){
     const command=extractWakeCommand(raw);
-    if(command===null)return;
+
+    if(command===null){
+     lastSubmitted='';
+     await ensureListening(80);
+     return;
+    }
 
     if(!command){
      await say('Ji Sir, boliye.');
      return;
     }
 
-    if(processing){
-     queue.push(command);
-    }else{
+    if(!processing){
      await processUtterance(command);
     }
+
     return;
    }
 
-   if(processing){
-    queue.push(raw);
-   }else{
+   /*
+    * Fix mode: every final utterance is a command.
+    */
+   if(!processing){
     await processUtterance(raw);
    }
   }
@@ -288,7 +375,7 @@ export async function startAssistant(nextMode='fix'){
    : 'Aapke phone mein kya problem hai? Aap mujhe bataiye, main use fix karne ki koshish karti hoon.'
  );
 
- await restartListening(100);
+ await ensureListening(100);
 }
 
 export async function stopAssistant(){
@@ -296,11 +383,11 @@ export async function stopAssistant(){
  wakeArmed=false;
  processing=false;
  listening=false;
- queue=[];
- confirmationResolver=null;
+ speaking=false;
+ restarting=false;
 
  clearTimeout(restartTimer);
- clearTimeout(partialTimer);
+ clearTimeout(acknowledgementTimer);
 
  await stopListening();
  stopSpeaking();

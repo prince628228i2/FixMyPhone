@@ -24,7 +24,7 @@ class TextToSpeechModule(private val ctx: ReactApplicationContext) : ReactContex
         val indian = voices.firstOrNull { it.locale.toLanguageTag().equals("hi-IN", true) }
             ?: voices.firstOrNull { it.locale.toLanguageTag().equals("en-IN", true) }
         engine.voice = female ?: indian ?: engine.defaultVoice
-        engine.setSpeechRate(0.98f)
+        engine.setSpeechRate(1.5f)
         engine.setPitch(1.06f)
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) = emit("start", id)
