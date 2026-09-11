@@ -47,6 +47,13 @@ class AccessibilityBridgeModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun getWindows(promise: com.facebook.react.bridge.Promise) {
+        withService(promise) { service ->
+            promise.resolve(service.nodeInspector.captureWindows())
+        }
+    }
+
+    @ReactMethod
     fun getSnapshot(promise: com.facebook.react.bridge.Promise) {
         withService(promise) { service ->
             promise.resolve(service.nodeInspector.captureSnapshot())
@@ -64,9 +71,18 @@ class AccessibilityBridgeModule(reactContext: ReactApplicationContext) :
                 "LONG_PRESS" -> executor.longPress(target)
                 "TYPE_TEXT" -> executor.typeText(target, params?.getString("text"))
                 "CLEAR_TEXT" -> executor.clearText(target)
+                "FOCUS" -> executor.focus(target)
+                "SELECT" -> executor.select(target)
+                "COPY" -> executor.copy(target)
+                "PASTE" -> executor.paste(target)
+                "EXPAND" -> executor.expand(target)
+                "COLLAPSE" -> executor.collapse(target)
+                "DISMISS" -> executor.dismiss(target)
+                "TOGGLE" -> executor.toggle(target)
                 "SCROLL" -> executor.scroll(params?.getString("direction"))
                 "SWIPE" -> executor.swipe(params?.getString("direction"))
-                "BACK", "HOME", "RECENTS" -> executor.globalAction(actionName.uppercase())
+                "BACK", "HOME", "RECENTS", "NOTIFICATIONS", "QUICK_SETTINGS", "POWER_DIALOG", "LOCK_SCREEN" ->
+                    executor.globalAction(actionName.uppercase())
                 else -> null
             }
 

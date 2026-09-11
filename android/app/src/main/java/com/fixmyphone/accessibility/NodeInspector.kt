@@ -3,34 +3,18 @@ package com.fixmyphone.accessibility
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 
-/**
- * Reads the current UI hierarchy into a plain, JSON-serializable snapshot
- * that the JS-side Observer can reason about. This is a READ-ONLY component
- * — it never mutates node state. Nothing here is persisted to disk or sent
- * anywhere outside the app process; the snapshot lives only in the RN
- * bridge call's return value for that single Observer step.
- *
- * Privacy note: text content of on-screen fields (including ones a user
- * hasn't chosen to share) is inherently visible to an AccessibilityService.
- * We do not filter it here because the Agent Engine needs it to do its job,
- * but the app must disclose this plainly to the user (see Part 10 —
- * Play Store readiness / accessibility disclosure copy) and must never log
- * or transmit snapshots for any purpose other than the current, user
- * initiated task.
- */
 class NodeInspector(private val service: FixMyPhoneAccessibilityService) {
 
-    /**
-     * Returns a snapshot of the active window's node tree, capped in depth
-     * and node count so a huge/broken hierarchy can't hang the bridge call.
-     */
-    fun captureSnapshot(maxNodes: Int = 400, maxDepth: Int = 40): WritableMap {
-        val root = service.rootInActiveWindow
+    fun captureSnapshot(maxNodes: Int = 600, maxDepth: Int = 50): WritableMap {
         val result = Arguments.createMap()
+        val root = service.rootInActiveWindow
+
+        result.putBoolean("serviceConnected", FixMyPhoneAccessibilityService.isConnected())
+        result.putInt("windowCount", service.windows?.size ?: 0)
 
         if (root == null) {
             result.putBoolean("available", false)
@@ -38,51 +22,89 @@ class NodeInspector(private val service: FixMyPhoneAccessibilityService) {
             return result
         }
 
-        val nodesArray = Arguments.createArray()
+        val nodes = Arguments.createArray()
         val counter = intArrayOf(0)
-        walk(root, depth = 0, maxDepth = maxDepth, maxNodes = maxNodes, counter = counter, out = nodesArray)
+
+        walk(root, 0, maxDepth, maxNodes, counter, nodes)
 
         result.putBoolean("available", true)
         result.putString("packageName", root.packageName?.toString())
+        result.putString("className", root.className?.toString())
         result.putInt("nodeCount", counter[0])
-        result.putArray("nodes", nodesArray)
+        result.putArray("nodes", nodes)
+
         root.recycle()
         return result
     }
 
-    /**
-     * Finds the first node matching a simple target descriptor — used by
-     * NodeActionExecutor to resolve { text } / { contentDescription } /
-     * { viewId } targets coming from an AI action before acting on it.
-     */
-    fun findNode(target: ReadableMap?, root: AccessibilityNodeInfo? = service.rootInActiveWindow): AccessibilityNodeInfo? {
-        if (root == null || target == null) return null
+    fun captureWindows(): WritableArray {
+        val result = Arguments.createArray()
 
-        val text = if (target.hasKey("text")) target.getString("text") else null
-        val desc = if (target.hasKey("contentDescription")) target.getString("contentDescription") else null
-        val viewId = if (target.hasKey("viewId")) target.getString("viewId") else null
+        service.windows?.forEach { window ->
+            val map = Arguments.createMap()
+            map.putInt("id", window.id)
+            map.putInt("type", window.type)
+            map.putBoolean("active", window.isActive)
+            map.putBoolean("focused", window.isFocused)
+            map.putString("title", window.title?.toString())
+            map.putString("packageName", window.root?.packageName?.toString())
+            result.pushMap(map)
+        }
 
-        return findRecursive(root, text, desc, viewId)
+        return result
+    }
+
+    fun findNode(
+        target: ReadableMap?,
+        root: AccessibilityNodeInfo? = service.rootInActiveWindow
+    ): AccessibilityNodeInfo? {
+        if (root == null || target == null) {
+            root?.recycle()
+            return null
+        }
+
+        val text = target.stringOrNull("text")
+        val desc = target.stringOrNull("contentDescription")
+        val viewId = target.stringOrNull("viewId")
+        val className = target.stringOrNull("className")
+
+        val result = findRecursive(root, text, desc, viewId, className)
+
+        if (result !== root) root.recycle()
+        return result
     }
 
     private fun findRecursive(
         node: AccessibilityNodeInfo,
         text: String?,
         desc: String?,
-        viewId: String?
+        viewId: String?,
+        className: String?
     ): AccessibilityNodeInfo? {
-        val matchesText = text != null && node.text?.toString()?.contains(text, ignoreCase = true) == true
-        val matchesDesc = desc != null && node.contentDescription?.toString()?.contains(desc, ignoreCase = true) == true
-        val matchesId = viewId != null && node.viewIdResourceName == viewId
+        val matchesText = text != null &&
+            node.text?.toString()?.contains(text, ignoreCase = true) == true
 
-        if (matchesText || matchesDesc || matchesId) return node
+        val matchesDesc = desc != null &&
+            node.contentDescription?.toString()?.contains(desc, ignoreCase = true) == true
+
+        val matchesId = viewId != null &&
+            node.viewIdResourceName == viewId
+
+        val matchesClass = className != null &&
+            node.className?.toString() == className
+
+        if (matchesText || matchesDesc || matchesId || matchesClass) {
+            return node
+        }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val match = findRecursive(child, text, desc, viewId)
+            val match = findRecursive(child, text, desc, viewId, className)
+
             if (match != null) return match
-            if (match != child) child.recycle()
+            child.recycle()
         }
+
         return null
     }
 
@@ -95,7 +117,8 @@ class NodeInspector(private val service: FixMyPhoneAccessibilityService) {
         out: WritableArray
     ) {
         if (depth > maxDepth || counter[0] >= maxNodes) return
-        counter[0] += 1
+
+        counter[0]++
 
         val bounds = Rect()
         node.getBoundsInScreen(bounds)
@@ -113,7 +136,13 @@ class NodeInspector(private val service: FixMyPhoneAccessibilityService) {
             putBoolean("checkable", node.isCheckable)
             putBoolean("checked", node.isChecked)
             putBoolean("focused", node.isFocused)
+            putBoolean("focusable", node.isFocusable)
+            putBoolean("selected", node.isSelected)
             putBoolean("enabled", node.isEnabled)
+            putBoolean("password", node.isPassword)
+            putBoolean("visible", node.isVisibleToUser)
+            putBoolean("dismissable", node.isDismissable)
+            putBoolean("contextClickable", node.isContextClickable)
             putMap("bounds", Arguments.createMap().apply {
                 putInt("left", bounds.left)
                 putInt("top", bounds.top)
@@ -121,12 +150,17 @@ class NodeInspector(private val service: FixMyPhoneAccessibilityService) {
                 putInt("bottom", bounds.bottom)
             })
         }
+
         out.pushMap(map)
 
         for (i in 0 until node.childCount) {
             if (counter[0] >= maxNodes) break
             val child = node.getChild(i) ?: continue
             walk(child, depth + 1, maxDepth, maxNodes, counter, out)
+            child.recycle()
         }
     }
+
+    private fun ReadableMap.stringOrNull(key: String): String? =
+        if (hasKey(key) && !isNull(key)) getString(key) else null
 }
