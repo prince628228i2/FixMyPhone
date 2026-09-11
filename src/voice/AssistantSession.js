@@ -25,6 +25,8 @@ let lastPartial='';
 let wakeArmed=false;
 let speaking=false;
 let restarting=false;
+let currentTtsText='';
+let pendingUtterances=[];
 
 const WAKE_WORD=/\bedith\b/i;
 
@@ -58,45 +60,90 @@ function isSmallTalk(text){
  return /^(ok|okay|haan|ha|yes|no|nahi|theek|thik|hmm|samajh gaya|samajh gayi|ji|achha|accha|right|fine|thank you|thanks)[.!\s]*$/i.test(String(text||'').trim());
 }
 
-async function ensureListening(delay=100){
- if(!active||speaking||listening||restarting)return;
+function isEcho(text){
+ const a=normalize(text);
+ const b=normalize(currentTtsText);
+
+ if(!a||!b)return false;
+ if(a===b)return true;
+ if(a.length>=8 && b.includes(a))return true;
+ if(b.length>=8 && a.includes(b))return true;
+
+ return false;
+}
+
+async function ensureListening(delay=80){
+ if(!active||listening||restarting)return;
 
  clearTimeout(restartTimer);
+
  restartTimer=setTimeout(async()=>{
-  if(!active||speaking||listening||restarting)return;
+  if(!active||listening||restarting)return;
 
   restarting=true;
+
   try{
+   progress('STT: RESTART');
    await startListening('hi-IN');
   }catch(e){
-   console.warn('[FixMyPhone][STT] restart failed:',String(e?.message||e));
+   progress('STT: RESTART_FAILED '+String(e?.message||e));
   }finally{
    restarting=false;
   }
  },delay);
 }
 
+async function startListeningImmediately(){
+ if(!active||listening||restarting)return;
+
+ restarting=true;
+
+ try{
+  progress('STT: PARALLEL_START');
+  await startListening('hi-IN');
+ }catch(e){
+  progress('STT: PARALLEL_START_FAILED '+String(e?.message||e));
+ }finally{
+  restarting=false;
+ }
+}
+
 async function say(text){
  if(!text||!active)return;
 
  clearTimeout(acknowledgementTimer);
+
+ currentTtsText=String(text);
  speaking=true;
 
  console.log('[FixMyPhone][TTS]',text);
  progress('TTS: '+text);
 
+ /*
+  * IMPORTANT:
+  * STT is deliberately started BEFORE waiting for TTS.
+  * Therefore microphone recognition and TTS run together.
+  */
+ await startListeningImmediately();
+
  try{
   await speak(text);
  }catch(e){
   console.warn('[FixMyPhone][TTS] failed:',String(e?.message||e));
- progress('TTS ERROR: '+String(e?.message||e));
+  progress('TTS ERROR: '+String(e?.message||e));
  }
 
  speaking=false;
 
- if(active){
-  await ensureListening(100);
- }
+ /*
+  * Keep echo information briefly so the recognizer does not
+  * immediately feed TTS output back into the agent.
+  */
+ setTimeout(()=>{
+  if(!speaking)currentTtsText='';
+ },700);
+
+ if(active)await ensureListening(80);
 }
 
 async function acknowledge(){
@@ -109,13 +156,50 @@ async function acknowledge(){
  return replies[Math.floor(Math.random()*replies.length)];
 }
 
+function queueUtterance(text){
+ const key=normalize(text);
+ if(!key)return;
+
+ if(pendingUtterances.some(x=>normalize(x)===key))return;
+
+ pendingUtterances.push(String(text).trim());
+
+ /*
+  * Keep the queue bounded. The latest meaningful command is
+  * more useful than an old repeated recognition result.
+  */
+ if(pendingUtterances.length>3){
+  pendingUtterances.shift();
+ }
+
+ progress('INPUT QUEUED: '+text);
+}
+
+async function processQueued(){
+ if(!active||processing||confirmationResolver)return;
+
+ const next=pendingUtterances.shift();
+
+ if(next){
+  await processUtterance(next);
+ }
+}
+
 async function processUtterance(text){
  const goal=String(text||'').trim();
+
  if(!goal||!active)return;
 
  const key=normalize(goal);
- if(!key||key===lastSubmitted)return;
- lastSubmitted=key;
+
+ if(!key)return;
+
+ if(key===lastSubmitted)return;
+
+ if(isEcho(goal)){
+  progress('STT: ECHO_IGNORED '+goal);
+  return;
+ }
 
  if(confirmationResolver){
   if(isYes(goal)){
@@ -138,7 +222,14 @@ async function processUtterance(text){
   return;
  }
 
+ if(processing){
+  queueUtterance(goal);
+  return;
+ }
+
+ lastSubmitted=key;
  processing=true;
+
  console.log('[FixMyPhone][PROGRESS] INPUT: '+goal);
  progress('INPUT: '+goal);
 
@@ -150,15 +241,10 @@ async function processUtterance(text){
   at:Date.now()
  });
 
- /*
-  * User input milte hi short acknowledgement.
-  * Iske baad AgentEngine immediately start hota hai.
-  */
- console.log('[FixMyPhone][PROGRESS] ACKNOWLEDGEMENT');
- progress('ACKNOWLEDGEMENT');
- await say(await acknowledge());
-
  try{
+  progress('ACKNOWLEDGEMENT');
+  await say(await acknowledge());
+
   const result=await runAgent(goal,{
    conversation:ConversationContext.get(),
 
@@ -185,6 +271,8 @@ async function processUtterance(text){
    }
   });
 
+  progress('AGENT RESULT: '+JSON.stringify(result));
+
   if(result.status==='success'&&!result.assistantReply){
    await say(
     mode==='24x7'
@@ -207,19 +295,20 @@ async function processUtterance(text){
   }
 
  }catch(e){
-  console.warn(
-   '[FixMyPhone][AGENT] error:',
-   String(e?.message||e)
-  );
+  console.warn('[FixMyPhone][AGENT] error:',String(e?.message||e));
+
+  progress('AGENT ERROR: '+String(e?.message||e));
 
   await say('Sir, ek problem aa gayi. Main dobara try karti hoon.');
 
  }finally{
   processing=false;
+  confirmationResolver=null;
+  lastSubmitted='';
 
-  if(active&&!confirmationResolver){
-   lastSubmitted='';
-   await ensureListening(100);
+  if(active){
+   await ensureListening(80);
+   await processQueued();
   }
  }
 }
@@ -235,16 +324,21 @@ export async function startAssistant(nextMode='fix'){
 
  active=true;
  mode=nextMode;
+
  console.log('[FixMyPhone][PROGRESS] ASSISTANT ACTIVE mode='+nextMode);
  progress('ASSISTANT ACTIVE mode='+nextMode);
+
  wakeArmed=(nextMode==='24x7');
+
  processing=false;
  listening=false;
  speaking=false;
  restarting=false;
+ currentTtsText='';
  lastSubmitted='';
  lastPartial='';
  confirmationResolver=null;
+ pendingUtterances=[];
 
  clearTimeout(restartTimer);
  clearTimeout(acknowledgementTimer);
@@ -268,22 +362,20 @@ export async function startAssistant(nextMode='fix'){
    JSON.stringify(e)
   );
 
+  progress('STT EVENT: '+JSON.stringify(e));
+
   if(e.event==='start'){
    listening=true;
    restarting=false;
+   progress('STT: LISTENING');
    return;
   }
 
   if(e.event==='end'){
    listening=false;
 
-   /*
-    * Android recognition session ended naturally.
-    * Mic service remains active; only recognition session
-    * is silently re-armed.
-    */
-   if(active&&!speaking){
-    await ensureListening(100);
+   if(active){
+    await ensureListening(80);
    }
 
    return;
@@ -292,12 +384,11 @@ export async function startAssistant(nextMode='fix'){
   if(e.event==='error'){
    listening=false;
 
-   console.warn(
-    '[FixMyPhone][STT ERROR]',
-    e.text||'unknown'
+   progress(
+    'STT ERROR: '+String(e.text||'unknown')
    );
 
-   if(active&&!speaking){
+   if(active){
     await ensureListening(180);
    }
 
@@ -312,15 +403,24 @@ export async function startAssistant(nextMode='fix'){
 
    lastPartial=normalized;
 
+   /*
+    * Do not submit TTS echo as user speech.
+    * Recognition itself remains active.
+    */
+   if(isEcho(raw)){
+    return;
+   }
+
    if(mode==='24x7'&&wakeArmed){
     const command=extractWakeCommand(raw);
 
-    if(command){
+    if(command!==null){
      clearTimeout(acknowledgementTimer);
 
      acknowledgementTimer=setTimeout(()=>{
-      if(active&&!processing){
-       processUtterance(command);
+      if(active){
+       if(command)processUtterance(command);
+       else say('Ji Sir, boliye.');
       }
      },120);
     }
@@ -336,8 +436,13 @@ export async function startAssistant(nextMode='fix'){
 
    clearTimeout(acknowledgementTimer);
 
+   if(isEcho(raw)){
+    progress('STT: FINAL_ECHO_IGNORED');
+    return;
+   }
+
    /*
-    * Confirmation gets priority.
+    * Confirmation always gets priority.
     */
    if(confirmationResolver){
     await processUtterance(raw);
@@ -345,7 +450,7 @@ export async function startAssistant(nextMode='fix'){
    }
 
    /*
-    * 24x7 requires Edith wake word.
+    * 24x7 mode requires Edith.
     */
    if(mode==='24x7'&&wakeArmed){
     const command=extractWakeCommand(raw);
@@ -361,7 +466,9 @@ export async function startAssistant(nextMode='fix'){
      return;
     }
 
-    if(!processing){
+    if(processing){
+     queueUtterance(command);
+    }else{
      await processUtterance(command);
     }
 
@@ -369,16 +476,24 @@ export async function startAssistant(nextMode='fix'){
    }
 
    /*
-    * Fix mode: every final utterance is a command.
+    * Fix mode accepts every final utterance.
     */
-   if(!processing){
+   if(processing){
+    queueUtterance(raw);
+   }else{
     await processUtterance(raw);
    }
   }
  });
 
+ /*
+  * App immediately goes to Home screen.
+  */
  await AssistantBridge?.minimizeApp?.();
 
+ /*
+  * TTS and STT now start together inside say().
+  */
  await say(greeting());
 
  await say(
@@ -387,29 +502,41 @@ export async function startAssistant(nextMode='fix'){
    : 'Aapke phone mein kya problem hai? Aap mujhe bataiye, main use fix karne ki koshish karti hoon.'
  );
 
- await ensureListening(100);
+ await ensureListening(80);
 }
 
 export async function stopAssistant(){
  active=false;
+
  console.log('[FixMyPhone][PROGRESS] ASSISTANT STOPPED');
  progress('ASSISTANT STOPPED');
+
  wakeArmed=false;
  processing=false;
  listening=false;
  speaking=false;
  restarting=false;
+ currentTtsText='';
+ confirmationResolver=null;
+ pendingUtterances=[];
 
  clearTimeout(restartTimer);
  clearTimeout(acknowledgementTimer);
 
- await stopListening();
- stopSpeaking();
+ try{
+  await stopListening();
+ }catch(e){}
+
+ try{
+  stopSpeaking();
+ }catch(e){}
 
  unsub?.();
  unsub=null;
 
- await AssistantBridge?.stopAssistant?.();
+ try{
+  await AssistantBridge?.stopAssistant?.();
+ }catch(e){}
 }
 
 export const isAssistantActive=()=>active;
