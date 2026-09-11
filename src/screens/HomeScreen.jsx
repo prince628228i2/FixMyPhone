@@ -1,18 +1,32 @@
-import React,{useEffect,useState} from 'react';
-import {View,Text,Pressable,StyleSheet,Alert} from 'react-native';
+import React,{useCallback,useEffect,useState} from 'react';
+import {View,Text,Pressable,StyleSheet,Alert,AppState} from 'react-native';
 import {startAssistant} from '../voice/AssistantSession';
 import {isAccessibilityServiceEnabled,openAccessibilitySettings} from '../services/AccessibilityBridge';
 
 export default function HomeScreen({onSettings}){
  const [enabled,setEnabled]=useState(false);
- useEffect(()=>{isAccessibilityServiceEnabled().then(setEnabled).catch(()=>{});},[]);
+ const refreshAccessibility=useCallback(()=>{
+  isAccessibilityServiceEnabled().then(setEnabled).catch(()=>setEnabled(false));
+ },[]);
+ useEffect(()=>{
+  refreshAccessibility();
+  const sub=AppState.addEventListener('change',state=>{
+   if(state==='active')refreshAccessibility();
+  });
+  return()=>sub.remove();
+ },[refreshAccessibility]);
  const launch=async(mode)=>{
   if(!enabled){
    Alert.alert('Accessibility required','Fix My Phone needs Accessibility Service to understand the screen and perform actions.',[
     {text:'Open Settings',onPress:openAccessibilitySettings},{text:'Cancel',style:'cancel'}
    ]); return;
   }
-  try { await startAssistant(mode); } catch(e) { Alert.alert('Could not start',String(e?.message||e)); }
+  try {
+   await startAssistant(mode);
+  } catch(e) {
+   Alert.alert('Could not start',String(e?.message||e));
+   refreshAccessibility();
+  }
  };
  return <View style={s.c}>
    <View style={s.top}><View><Text style={s.logo}>🤖 Fix My Phone</Text><Text style={s.sub}>Your AI Phone Assistant</Text></View><Pressable onPress={onSettings} style={s.gear}><Text style={s.gearT}>⚙</Text></Pressable></View>

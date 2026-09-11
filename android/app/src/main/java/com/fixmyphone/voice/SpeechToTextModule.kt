@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -19,6 +20,7 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
 
     @ReactMethod
     fun startListening(locale: String, p: Promise) {
+        Log.i(TAG, "startListening locale=$locale")
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
             p.reject("UNAVAILABLE", "Speech recognition unavailable")
             return
@@ -28,15 +30,27 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
         recognizer = SpeechRecognizer.createSpeechRecognizer(ctx)
 
         recognizer!!.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) = emit("start", null)
-            override fun onBeginningOfSpeech() {}
+            override fun onReadyForSpeech(params: Bundle?) {
+                Log.i(TAG, "onReadyForSpeech")
+                emit("start", null)
+            }
+            override fun onBeginningOfSpeech() {
+                Log.i(TAG, "onBeginningOfSpeech")
+            }
             override fun onRmsChanged(v: Float) {}
             override fun onBufferReceived(b: ByteArray?) {}
-            override fun onEndOfSpeech() = emit("end", null)
-            override fun onError(e: Int) = emit("error", e.toString())
+            override fun onEndOfSpeech() {
+                Log.i(TAG, "onEndOfSpeech")
+                emit("end", null)
+            }
+            override fun onError(e: Int) {
+                Log.e(TAG, "onError=$e")
+                emit("error", e.toString())
+            }
 
             override fun onResults(b: Bundle?) {
                 val x = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                Log.i(TAG, "onResults=$x")
                 emit("results", x)
             }
 
@@ -67,6 +81,10 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
         if (v != null) m.putString("text", v)
         ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit("onSpeechEvent", m)
+    }
+
+    companion object {
+        private const val TAG = "FixMyPhoneSTT"
     }
 
     override fun onCatalystInstanceDestroy() {

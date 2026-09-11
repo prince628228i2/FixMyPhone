@@ -1,3 +1,4 @@
+console.log('[FixMyPhone][AGENT] AgentEngine loaded');
 import {useAgentStore} from './AgentState';
 import {observe} from './Observer';
 import {planTask} from './Planner';

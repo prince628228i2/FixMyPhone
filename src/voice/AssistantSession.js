@@ -19,8 +19,22 @@ function extractWakeCommand(text){
 
 function greeting(){const h=new Date().getHours(); if(h>=5&&h<12)return 'Good morning, Sir.'; if(h>=12&&h<17)return 'Good afternoon, Sir.'; if(h>=17&&h<21)return 'Good evening, Sir.'; return 'Good night, Sir.';}
 function isSmallTalk(text){return /^(ok|okay|haan|ha|yes|no|nahi|theek|thik|hmm|samajh gaya|samajh gayi|ji|achha|accha|right|fine|thank you|thanks)[.!\s]*$/i.test(String(text||'').trim());}
-async function listenAgain(delay=120){if(!active)return;clearTimeout(restartTimer);restartTimer=setTimeout(()=>startListening('hi-IN').catch(()=>{}),delay);}
-async function say(text){stopListening(); await speak(text); if(active) await listenAgain(100);}
+async function listenAgain(delay=120){
+ if(!active)return;
+ clearTimeout(restartTimer);
+ restartTimer=setTimeout(async()=>{
+  if(!active||processing)return;
+  try{await startListening('hi-IN');}
+  catch(e){console.warn('[FixMyPhone][STT] start failed:',String(e?.message||e));}
+ },delay);
+}
+async function say(text){
+ if(!text)return;
+ stopListening();
+ console.log('[FixMyPhone][TTS]',text);
+ try{await speak(text);}catch(e){console.warn('[FixMyPhone][TTS] failed:',String(e?.message||e));}
+ if(active&&!processing)await listenAgain(150);
+}
 
 async function processUtterance(text){
  const goal=String(text||'').trim(); if(!goal||!active)return;
@@ -57,13 +71,14 @@ export async function startAssistant(nextMode='fix'){
   wakeArmed=false;
   throw e;
  }
- await AssistantBridge?.minimizeApp?.();
- await say(greeting());
- await say(mode==='24x7'
-  ? 'Hello Sir, mera naam Edith hai. Jab bhi aapko mujhse baat karni ho, sabse pehle Edith bolna hoga. Uske baad main aapki baat sunungi aur aapki madad karungi.'
-  : 'Aapke phone mein kya problem hai? Aap mujhe bataiye, main use fix karne ki koshish karti hoon.');
  unsub=subscribeVoiceEvents(e=>{
   if(!active)return;
+  console.log('[FixMyPhone][STT EVENT]',JSON.stringify(e));
+  if(e.event==='error'){
+   console.warn('[FixMyPhone][STT ERROR]',e.text||'unknown');
+   if(!processing)listenAgain(300);
+   return;
+  }
   if(e.event==='results'&&e.text){
    const raw=String(e.text).trim();
    listenAgain(40);
@@ -77,7 +92,12 @@ export async function startAssistant(nextMode='fix'){
    if(processing)queue.push(raw);else processUtterance(raw);
   }
  });
- await listenAgain(120);
+ await AssistantBridge?.minimizeApp?.();
+ await say(greeting());
+ await say(mode==='24x7'
+  ? 'Hello Sir, mera naam Edith hai. Jab bhi aapko mujhse baat karni ho, sabse pehle Edith bolna hoga. Uske baad main aapki baat sunungi aur aapki madad karungi.'
+  : 'Aapke phone mein kya problem hai? Aap mujhe bataiye, main use fix karne ki koshish karti hoon.');
+ await listenAgain(200);
 }
 export async function stopAssistant(){active=false;wakeArmed=false;processing=false;queue=[];confirmationResolver=null;clearTimeout(restartTimer);stopListening();stopSpeaking();unsub?.();unsub=null;await AssistantBridge?.stopAssistant?.();}
 export const isAssistantActive=()=>active;

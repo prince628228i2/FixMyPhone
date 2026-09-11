@@ -35,7 +35,22 @@ class AccessibilityBridgeModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun isServiceEnabled(promise: com.facebook.react.bridge.Promise) {
-        promise.resolve(FixMyPhoneAccessibilityService.isConnected())
+        try {
+            val enabledServices = Settings.Secure.getString(
+                appContext?.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ).orEmpty()
+
+            val component = "${appContext?.packageName}/${FixMyPhoneAccessibilityService::class.java.name}"
+
+            val enabledBySettings = enabledServices
+                .split(':')
+                .any { it.equals(component, ignoreCase = true) }
+
+            promise.resolve(enabledBySettings || FixMyPhoneAccessibilityService.isConnected())
+        } catch (e: Exception) {
+            promise.resolve(FixMyPhoneAccessibilityService.isConnected())
+        }
     }
 
     @ReactMethod
