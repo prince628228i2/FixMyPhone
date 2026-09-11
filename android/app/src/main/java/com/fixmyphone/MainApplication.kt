@@ -51,7 +51,6 @@ class MainApplication : Application(), ReactApplication {
 
     override val reactHost: ReactHost
         get() {
-            markStage("ReactHost: creating")
             return getDefaultReactHost(applicationContext, reactNativeHost)
         }
 
