@@ -13,25 +13,32 @@ import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
+import com.fixmyphone.safety.SafetyPackage
+import com.fixmyphone.device.DevicePackage
+import com.fixmyphone.service.AssistantPackage
+import com.fixmyphone.voice.VoicePackage
+import com.fixmyphone.device.DeviceActionHandler
+import com.fixmyphone.executor.ExecutorPackage
+import com.fixmyphone.executor.ActionDispatcher
+import com.fixmyphone.accessibility.AccessibilityPackage
+import com.fixmyphone.accessibility.AccessibilityActionHandler
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class MainApplication : Application(), ReactApplication {
 
-    companion object {
-        @Volatile
-        private var stage = "Application: starting"
-
-        fun markStage(value: String) {
-            stage = value
-        }
-    }
-
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> =
-                PackageList(this).packages
+                PackageList(this).packages.apply {
+                    add(AccessibilityPackage())
+                    add(ExecutorPackage())
+                    add(VoicePackage())
+                    add(AssistantPackage())
+                    add(DevicePackage())
+                    add(SafetyPackage())
+                }
 
             override fun getJSMainModuleName(): String = "index"
 
@@ -50,17 +57,9 @@ class MainApplication : Application(), ReactApplication {
 
     override fun onCreate() {
         super.onCreate()
-        markStage("Application.onCreate: started")
-        installCrashLogger()
-
-        try {
-            markStage("SoLoader: starting")
-            SoLoader.init(this, false)
-            markStage("SoLoader: OK")
-        } catch (t: Throwable) {
-            saveCrash("SoLoader initialization failed", t)
-            throw t
-        }
+        SoLoader.init(this, false)
+        ActionDispatcher.registerHandler(AccessibilityActionHandler())
+        ActionDispatcher.registerHandler(DeviceActionHandler(this))
     }
 
 }
