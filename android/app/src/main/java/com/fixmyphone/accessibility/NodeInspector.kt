@@ -5,6 +5,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.WritableMap
 
 /**
  * Reads the current UI hierarchy into a plain, JSON-serializable snapshot
