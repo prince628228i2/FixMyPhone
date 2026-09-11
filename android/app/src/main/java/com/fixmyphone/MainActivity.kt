@@ -1,15 +1,20 @@
 package com.fixmyphone
 
-import com.facebook.react.ReactActivity
-import com.facebook.react.ReactActivityDelegate
-import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
-import com.facebook.react.defaults.DefaultReactActivityDelegate
+import android.app.Activity
+import android.os.Bundle
+import android.graphics.Color
+import android.view.Gravity
+import android.widget.TextView
 
-class MainActivity : ReactActivity() {
-
-    // Name registered in AppRegistry.registerComponent(...) inside index.js
-    override fun getMainComponentName(): String = "FixMyPhone"
-
-    override fun createReactActivityDelegate(): ReactActivityDelegate =
-        DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+class MainActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val text = TextView(this)
+        text.text = "Fix My Phone\nNative Launch OK"
+        text.textSize = 28f
+        text.setTextColor(Color.WHITE)
+        text.gravity = Gravity.CENTER
+        text.setBackgroundColor(Color.rgb(7,16,24))
+        setContentView(text)
+    }
 }
