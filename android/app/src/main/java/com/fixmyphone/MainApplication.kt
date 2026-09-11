@@ -20,6 +20,18 @@ import com.fixmyphone.device.DevicePackage
 import com.fixmyphone.safety.SafetyPackage
 
 class MainApplication : Application(), ReactApplication {
+    private fun installCrashLogger() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                openFileOutput("startup_crash.txt", MODE_PRIVATE).use { out ->
+                    out.write(("Thread: ${thread.name}\n${throwable.stackTraceToString()}").toByteArray())
+                }
+            } catch (_: Throwable) {}
+            previous?.uncaughtException(thread, throwable)
+        }
+    }
+
 
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
