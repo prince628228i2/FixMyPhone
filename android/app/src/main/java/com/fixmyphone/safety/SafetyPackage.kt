@@ -1,3 +1,14 @@
 package com.fixmyphone.safety
-import com.facebook.react.*; import com.facebook.react.bridge.*
-class SafetyPackage:ReactPackage{override fun createNativeModules(c:ReactApplicationContext)=listOf(SecureKeyStoreModule(c));override fun createViewManagers(c:ReactApplicationContext)=emptyList<ViewManager<*,*>>()}
+
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.uimanager.ViewManager
+
+class SafetyPackage : ReactPackage {
+    override fun createNativeModules(c: ReactApplicationContext): List<NativeModule> =
+        listOf(SecureKeyStoreModule(c))
+
+    override fun createViewManagers(c: ReactApplicationContext): List<ViewManager<*, *>> =
+        emptyList()
+}
