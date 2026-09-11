@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Fix My Phone</string>
-    <string name="accessibility_service_description">Fix My Phone uses Accessibility to see what's on your screen and tap/type/scroll on your behalf, only when you ask it to fix a problem or run a voice command. It does not run in the background without your action, and screen content is never stored or sent anywhere except to power the task you requested.</string>
+    <string name="fix_my_phone_accessibility_description">Fix My Phone uses Accessibility to read the screen and perform taps, typing, and scrolling when you ask it to help.</string>
 </resources>
