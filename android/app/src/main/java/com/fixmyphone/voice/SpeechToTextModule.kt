@@ -32,6 +32,7 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
             }
             try {
                 Log.i(TAG, "startListening locale=$locale")
+                com.fixmyphone.ProgressLogger.log("STT: START locale=$locale")
                 if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
                     p.reject("UNAVAILABLE", "Speech recognition unavailable")
                     return@post
@@ -45,6 +46,7 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
                     override fun onReadyForSpeech(params: Bundle?) {
                         listening = true
                         Log.i(TAG, "onReadyForSpeech")
+                        com.fixmyphone.ProgressLogger.log("STT: READY")
                         emit("start", null)
                     }
 
@@ -58,12 +60,14 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
                     override fun onEndOfSpeech() {
                         listening = false
                         Log.i(TAG, "onEndOfSpeech")
+                        com.fixmyphone.ProgressLogger.log("STT: END_OF_SPEECH")
                         emit("end", null)
                     }
 
                     override fun onError(e: Int) {
                         listening = false
                         Log.e(TAG, "onError=$e")
+                        com.fixmyphone.ProgressLogger.log("STT: ERROR code=$e")
                         emit("error", e.toString())
                     }
 
@@ -73,6 +77,7 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
                             SpeechRecognizer.RESULTS_RECOGNITION
                         )?.firstOrNull()
                         Log.i(TAG, "onResults=$x")
+                        if (!x.isNullOrBlank()) com.fixmyphone.ProgressLogger.log("STT: RESULT: $x")
                         if (!x.isNullOrBlank()) emit("results", x)
                     }
 
@@ -80,7 +85,10 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
                         val x = b?.getStringArrayList(
                             SpeechRecognizer.RESULTS_RECOGNITION
                         )?.firstOrNull()
-                        if (!x.isNullOrBlank()) emit("partial", x)
+                        if (!x.isNullOrBlank()) {
+                            com.fixmyphone.ProgressLogger.log("STT: PARTIAL: $x")
+                            emit("partial", x)
+                        }
                     }
 
                     override fun onEvent(a: Int, b: Bundle?) {}
@@ -96,6 +104,7 @@ class SpeechToTextModule(private val ctx: ReactApplicationContext) : ReactContex
                 p.resolve(true)
             } catch (e: Exception) {
                 Log.e(TAG, "startListening failed", e)
+                com.fixmyphone.ProgressLogger.log("STT: START_FAILED: ${e.message}")
                 p.reject("START_FAILED", e)
             }
         }

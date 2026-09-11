@@ -6,7 +6,11 @@ import {useAgentStore} from '../agent/AgentState';
 import {ConversationContext} from './ConversationContext';
 import {requestMicrophonePermission} from '../utils/permissions';
 
-const {AssistantBridge}=NativeModules;
+const {AssistantBridge,ProgressLogger}=NativeModules;
+
+const progress=(message)=>{
+ try{ProgressLogger?.log?.(String(message));}catch(e){}
+};
 
 let active=false;
 let mode='fix';
@@ -79,11 +83,13 @@ async function say(text){
  speaking=true;
 
  console.log('[FixMyPhone][TTS]',text);
+ progress('TTS: '+text);
 
  try{
   await speak(text);
  }catch(e){
   console.warn('[FixMyPhone][TTS] failed:',String(e?.message||e));
+ progress('TTS ERROR: '+String(e?.message||e));
  }
 
  speaking=false;
@@ -133,6 +139,8 @@ async function processUtterance(text){
  }
 
  processing=true;
+ console.log('[FixMyPhone][PROGRESS] INPUT: '+goal);
+ progress('INPUT: '+goal);
 
  ConversationContext.set({lastUserUtterance:goal});
 
@@ -146,6 +154,8 @@ async function processUtterance(text){
   * User input milte hi short acknowledgement.
   * Iske baad AgentEngine immediately start hota hai.
   */
+ console.log('[FixMyPhone][PROGRESS] ACKNOWLEDGEMENT');
+ progress('ACKNOWLEDGEMENT');
  await say(await acknowledge());
 
  try{
@@ -225,6 +235,8 @@ export async function startAssistant(nextMode='fix'){
 
  active=true;
  mode=nextMode;
+ console.log('[FixMyPhone][PROGRESS] ASSISTANT ACTIVE mode='+nextMode);
+ progress('ASSISTANT ACTIVE mode='+nextMode);
  wakeArmed=(nextMode==='24x7');
  processing=false;
  listening=false;
@@ -380,6 +392,8 @@ export async function startAssistant(nextMode='fix'){
 
 export async function stopAssistant(){
  active=false;
+ console.log('[FixMyPhone][PROGRESS] ASSISTANT STOPPED');
+ progress('ASSISTANT STOPPED');
  wakeArmed=false;
  processing=false;
  listening=false;

@@ -14,6 +14,7 @@ class AssistantBridgeModule(private val ctx: ReactApplicationContext) : ReactCon
     @ReactMethod
     fun startAssistant(mode: String, promise: Promise) {
         try {
+            com.fixmyphone.ProgressLogger.log("ASSISTANT: START mode=$mode")
             val i = Intent(ctx, AgentForegroundService::class.java).apply {
                 action = AgentForegroundService.ACTION_START
                 putExtra(AgentForegroundService.EXTRA_MODE, mode)
@@ -34,6 +35,7 @@ class AssistantBridgeModule(private val ctx: ReactApplicationContext) : ReactCon
     @ReactMethod
     fun minimizeApp(promise: Promise) {
         try {
+            com.fixmyphone.ProgressLogger.log("ASSISTANT: MINIMIZE_APP")
             currentActivity?.moveTaskToBack(true)
             promise.resolve(true)
         } catch (e: Exception) { promise.reject("MINIMIZE_FAILED", e) }

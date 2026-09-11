@@ -38,6 +38,7 @@ class MainApplication : Application(), ReactApplication {
                     add(AssistantPackage())
                     add(DevicePackage())
                     add(SafetyPackage())
+                    add(ProgressLoggerPackage())
                 }
 
             override fun getJSMainModuleName(): String = "index"
@@ -56,20 +57,27 @@ class MainApplication : Application(), ReactApplication {
 
     override fun onCreate() {
         StartupCrashLogger.install(this)
+        ProgressLogger.install(this)
+        ProgressLogger.log("Application.onCreate: entered")
         StartupCrashLogger.setStage("Application.onCreate: entered")
 
         super.onCreate()
 
+        ProgressLogger.log("SoLoader: starting")
         StartupCrashLogger.setStage("SoLoader: starting")
         SoLoader.init(this, false)
+        ProgressLogger.log("SoLoader: OK")
         StartupCrashLogger.setStage("SoLoader: OK")
 
+        ProgressLogger.log("Registering AccessibilityActionHandler")
         StartupCrashLogger.setStage("Registering AccessibilityActionHandler")
         ActionDispatcher.registerHandler(AccessibilityActionHandler())
 
+        ProgressLogger.log("Registering DeviceActionHandler")
         StartupCrashLogger.setStage("Registering DeviceActionHandler")
         ActionDispatcher.registerHandler(DeviceActionHandler(this))
 
+        ProgressLogger.log("Application.onCreate: complete")
         StartupCrashLogger.setStage("Application.onCreate: complete")
     }
 
