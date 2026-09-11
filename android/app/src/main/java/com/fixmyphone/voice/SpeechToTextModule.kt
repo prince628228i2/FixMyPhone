@@ -140,13 +140,13 @@ class SpeechToTextModule(
 
                         if (desiredListening) {
                             val delay = when (error) {
-                                SpeechRecognizer.ERROR_NO_MATCH -> 150
-                                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 150
-                                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 500
-                                SpeechRecognizer.ERROR_CLIENT -> 500
-                                SpeechRecognizer.ERROR_NETWORK -> 1200
-                                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> 1500
-                                else -> 1000
+                                SpeechRecognizer.ERROR_NO_MATCH -> 150L
+                                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 150L
+                                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 500L
+                                SpeechRecognizer.ERROR_CLIENT -> 500L
+                                SpeechRecognizer.ERROR_NETWORK -> 1200L
+                                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> 1500L
+                                else -> 1000L
                             }
 
                             scheduleRestart(delay)
