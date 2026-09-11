@@ -4,6 +4,7 @@ import {speak, stopSpeaking} from './TextToSpeech';
 import {runAgent} from '../agent/AgentEngine';
 import {useAgentStore} from '../agent/AgentState';
 import {ConversationContext} from './ConversationContext';
+import {requestMicrophonePermission} from '../utils/permissions';
 
 const {AssistantBridge}=NativeModules;
 let active=false,mode='fix',processing=false,queue=[],unsub=null,restartTimer=null,confirmationResolver=null;
@@ -39,27 +40,43 @@ async function processUtterance(text){
 }
 
 export async function startAssistant(nextMode='fix'){
- if(active)return; active=true; mode=nextMode; wakeArmed=(nextMode==='24x7'); queue=[]; processing=false; ConversationContext.clear(); useAgentStore.getState().reset();
- await AssistantBridge?.startAssistant?.(mode);
- // Hide the React Native UI immediately; all subsequent interaction is voice-first.
+ if(active)return;
+ const micGranted=await requestMicrophonePermission();
+ if(!micGranted) throw new Error('Microphone permission is required for voice assistant.');
+ active=true;
+ mode=nextMode;
+ wakeArmed=(nextMode==='24x7');
+ queue=[];
+ processing=false;
+ ConversationContext.clear();
+ useAgentStore.getState().reset();
+ try{
+  await AssistantBridge?.startAssistant?.(mode);
+ }catch(e){
+  active=false;
+  wakeArmed=false;
+  throw e;
+ }
  await AssistantBridge?.minimizeApp?.();
  await say(greeting());
- await say(mode==='24x7'?'Hello Sir, mera naam Edith hai. Jab bhi aapko mujhse baat karni ho, sabse pehle Edith bolna hoga. Uske baad main aapki baat sunungi aur aapki madad karungi.':'Aapke phone mein kya problem hai? Aap mujhe bataiye, main use fix karne ki koshish karti hoon.');
+ await say(mode==='24x7'
+  ? 'Hello Sir, mera naam Edith hai. Jab bhi aapko mujhse baat karni ho, sabse pehle Edith bolna hoga. Uske baad main aapki baat sunungi aur aapki madad karungi.'
+  : 'Aapke phone mein kya problem hai? Aap mujhe bataiye, main use fix karne ki koshish karti hoon.');
  unsub=subscribeVoiceEvents(e=>{
   if(!active)return;
   if(e.event==='results'&&e.text){
-    const raw=String(e.text).trim();
-    listenAgain(40);
-    if(mode==='24x7' && wakeArmed){
-      const command=extractWakeCommand(raw);
-      if(command===null) return;
-      if(!command){ say('Ji Sir, boliye.'); return; }
-      if(processing) queue.push(command); else processUtterance(command);
-      return;
-    }
-    if(processing)queue.push(raw); else processUtterance(raw);
+   const raw=String(e.text).trim();
+   listenAgain(40);
+   if(mode==='24x7'&&wakeArmed){
+    const command=extractWakeCommand(raw);
+    if(command===null)return;
+    if(!command){say('Ji Sir, boliye.');return;}
+    if(processing)queue.push(command);else processUtterance(command);
+    return;
+   }
+   if(processing)queue.push(raw);else processUtterance(raw);
   }
-});
+ });
  await listenAgain(120);
 }
 export async function stopAssistant(){active=false;wakeArmed=false;processing=false;queue=[];confirmationResolver=null;clearTimeout(restartTimer);stopListening();stopSpeaking();unsub?.();unsub=null;await AssistantBridge?.stopAssistant?.();}
