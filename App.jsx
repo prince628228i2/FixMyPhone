@@ -1,11 +1,15 @@
-import React,{useEffect,useState} from 'react';
-import {SafeAreaView,StatusBar,StyleSheet,View} from 'react-native';
-import HomeScreen from './src/screens/HomeScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import {useAgentStore} from './src/agent/AgentState';
-export default function App(){
- const dark=true; const [screen,setScreen]=useState('home'); const reset=useAgentStore(s=>s.reset);
- useEffect(()=>reset(),[reset]);
- return <SafeAreaView style={s.root}><StatusBar barStyle="light-content"/><View style={s.body}>{screen==='settings'?<SettingsScreen onBack={()=>setScreen('home')}/>:<HomeScreen onSettings={()=>setScreen('settings')}/>}</View></SafeAreaView>
+import React from 'react';
+import {SafeAreaView, Text, StyleSheet} from 'react-native';
+
+export default function App() {
+  return (
+    <SafeAreaView style={styles.root}>
+      <Text style={styles.text}>Fix My Phone</Text>
+    </SafeAreaView>
+  );
 }
-const s=StyleSheet.create({root:{flex:1,backgroundColor:'#071018'},body:{flex:1}});
+
+const styles = StyleSheet.create({
+  root: {flex: 1, backgroundColor: '#071018', alignItems: 'center', justifyContent: 'center'},
+  text: {color: '#fff', fontSize: 28, fontWeight: 'bold'},
+});
