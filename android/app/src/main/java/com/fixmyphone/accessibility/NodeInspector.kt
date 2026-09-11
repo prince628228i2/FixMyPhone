@@ -4,7 +4,7 @@ import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableArray
-import com.facebook.react.bridge.WritableMap
+import com.facebook.react.bridge.ReadableMap
 
 /**
  * Reads the current UI hierarchy into a plain, JSON-serializable snapshot
@@ -54,7 +54,7 @@ class NodeInspector(private val service: FixMyPhoneAccessibilityService) {
      * NodeActionExecutor to resolve { text } / { contentDescription } /
      * { viewId } targets coming from an AI action before acting on it.
      */
-    fun findNode(target: WritableMap?, root: AccessibilityNodeInfo? = service.rootInActiveWindow): AccessibilityNodeInfo? {
+    fun findNode(target: ReadableMap?, root: AccessibilityNodeInfo? = service.rootInActiveWindow): AccessibilityNodeInfo? {
         if (root == null || target == null) return null
 
         val text = if (target.hasKey("text")) target.getString("text") else null

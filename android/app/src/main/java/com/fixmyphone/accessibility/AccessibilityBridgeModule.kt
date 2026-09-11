@@ -43,7 +43,7 @@ class AccessibilityBridgeModule(reactContext: ReactApplicationContext) :
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        appContext.startActivity(intent)
+        appContext?.startActivity(intent)
     }
 
     @ReactMethod

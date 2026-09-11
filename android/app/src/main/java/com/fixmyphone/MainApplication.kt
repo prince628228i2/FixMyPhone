@@ -8,7 +8,6 @@ import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
-import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
 import com.fixmyphone.accessibility.AccessibilityActionHandler
 import com.fixmyphone.accessibility.AccessibilityPackage
@@ -27,7 +26,7 @@ class MainApplication : Application(), ReactApplication {
             override fun getPackages(): List<ReactPackage> {
                 // PackageList picks up autolinked JS-side native modules.
                 // Custom native modules are appended here as each part lands.
-                val packages = PackageList(this).packages
+                val packages = PackageList(this).packages.toMutableList()
                 packages.add(AccessibilityPackage())
                 packages.add(ExecutorPackage())
                 packages.add(VoicePackage())
@@ -51,8 +50,8 @@ class MainApplication : Application(), ReactApplication {
 
     override fun onCreate() {
         super.onCreate()
-        SoLoader.init(this, OpenSourceMergedSoMapping)
 
+        SoLoader.init(this, false)
         // Register one ActionHandler per domain here. AccessibilityActionHandler
         // is stateless (reads FixMyPhoneAccessibilityService.instance lazily),
         // so registering it before the service connects is safe — it will

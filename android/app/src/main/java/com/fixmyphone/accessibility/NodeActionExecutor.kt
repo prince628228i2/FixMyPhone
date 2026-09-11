@@ -6,7 +6,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
-import com.facebook.react.bridge.WritableMap
+import com.facebook.react.bridge.ReadableMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -27,7 +27,7 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
 
     private val inspector get() = service.nodeInspector
 
-    fun tap(target: WritableMap?): String {
+    fun tap(target: ReadableMap?): String {
         val node = inspector.findNode(target) ?: return "failed"
         val result = try {
             if (node.isClickable) {
@@ -41,7 +41,7 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
         return if (result) "executed" else "failed"
     }
 
-    fun longPress(target: WritableMap?): String {
+    fun longPress(target: ReadableMap?): String {
         val node = inspector.findNode(target) ?: return "failed"
         val result = try {
             node.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)
@@ -51,7 +51,7 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
         return if (result) "executed" else "failed"
     }
 
-    fun typeText(target: WritableMap?, text: String?): String {
+    fun typeText(target: ReadableMap?, text: String?): String {
         if (text == null) return "failed"
         val node = inspector.findNode(target) ?: return "failed"
         val result = try {
@@ -66,7 +66,7 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
         return if (result) "executed" else "failed"
     }
 
-    fun clearText(target: WritableMap?): String {
+    fun clearText(target: ReadableMap?): String {
         val node = inspector.findNode(target) ?: return "failed"
         val result = try {
             if (!node.isEditable) return "failed"

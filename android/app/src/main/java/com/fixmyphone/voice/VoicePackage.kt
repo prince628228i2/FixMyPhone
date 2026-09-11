@@ -1,4 +1,5 @@
 package com.fixmyphone.voice
+import com.facebook.react.uimanager.ViewManager
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
