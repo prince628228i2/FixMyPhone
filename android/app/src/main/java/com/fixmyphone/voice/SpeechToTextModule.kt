@@ -14,7 +14,6 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import java.util.Locale
 
 class SpeechToTextModule(
     private val ctx: ReactApplicationContext
@@ -28,8 +27,7 @@ class SpeechToTextModule(
     private var destroyed = false
     private var restartScheduled = false
     private var locale = "hi-IN"
-
-    private var restartAttempts = 0
+    private var sessionId = 0L
 
     override fun getName() = "SpeechToText"
 
@@ -37,220 +35,224 @@ class SpeechToTextModule(
     fun startListening(requestedLocale: String, promise: Promise) {
         mainHandler.post {
             if (destroyed) {
-                promise.reject(
-                    "DESTROYED",
-                    "Speech recognition module is destroyed"
-                )
+                promise.reject("DESTROYED", "Speech recognition module is destroyed")
                 return@post
             }
 
-            val requested = requestedLocale.ifBlank { "hi-IN" }
-
             if (desiredListening) {
                 com.fixmyphone.ProgressLogger.log(
-                    "STT: START_IGNORED_ALREADY_DESIRED actual=$actualListening scheduled=$restartScheduled"
+                    "STT: START_IGNORED already_active actual=$actualListening restart=$restartScheduled"
                 )
                 promise.resolve(true)
                 return@post
             }
 
-            locale = requested
+            locale = requestedLocale.ifBlank { "hi-IN" }
             desiredListening = true
-            restartAttempts = 0
+            restartScheduled = false
 
             com.fixmyphone.ProgressLogger.log(
-                "STT: DESIRED_LISTENING locale=$locale"
+                "STT: LISTENING_REQUEST locale=$locale"
             )
 
-            startRecognizerNow()
-
+            startRecognizer()
             promise.resolve(true)
         }
     }
 
-    private fun startRecognizerNow() {
-        if (destroyed || !desiredListening) return
-        if (actualListening) return
+    private fun startRecognizer() {
+        if (destroyed || !desiredListening || actualListening || restartScheduled) return
 
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
-            com.fixmyphone.ProgressLogger.log(
-                "STT: UNAVAILABLE"
-            )
+            com.fixmyphone.ProgressLogger.log("STT: UNAVAILABLE")
             emit("error", "unavailable")
-            scheduleRestart(2000)
+            scheduleRestart(2000L)
             return
         }
 
-        try {
-            restartScheduled = false
+        restartScheduled = false
 
-            recognizer?.cancel()
-            recognizer?.destroy()
+        val mySession = ++sessionId
+
+        try {
+            // Only the previous TERMINATED recognizer is destroyed here.
+            // Never cancel/destroy a recognizer from inside its own callback.
+            recognizer?.let {
+                try {
+                    it.destroy()
+                } catch (_: Throwable) {}
+            }
             recognizer = null
 
-            recognizer = SpeechRecognizer.createSpeechRecognizer(ctx)
+            val sr = SpeechRecognizer.createSpeechRecognizer(ctx)
+            recognizer = sr
 
-            recognizer?.setRecognitionListener(
-                object : RecognitionListener {
+            sr.setRecognitionListener(object : RecognitionListener {
 
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        actualListening = true
-                        restartAttempts = 0
+                private fun isCurrent(): Boolean =
+                    !destroyed &&
+                    desiredListening &&
+                    mySession == sessionId
 
-                        Log.i(TAG, "onReadyForSpeech")
-                        com.fixmyphone.ProgressLogger.log(
-                            "STT: READY"
-                        )
+                override fun onReadyForSpeech(params: Bundle?) {
+                    if (!isCurrent()) return
 
-                        emit("start", null)
-                    }
+                    actualListening = true
 
-                    override fun onBeginningOfSpeech() {
-                        Log.i(TAG, "onBeginningOfSpeech")
-                        com.fixmyphone.ProgressLogger.log(
-                            "STT: BEGIN"
-                        )
-                    }
-
-                    override fun onRmsChanged(v: Float) {}
-
-                    override fun onBufferReceived(b: ByteArray?) {}
-
-                    override fun onEndOfSpeech() {
-                        actualListening = false
-
-                        Log.i(TAG, "onEndOfSpeech")
-                        com.fixmyphone.ProgressLogger.log(
-                            "STT: END_OF_SPEECH"
-                        )
-
-                        emit("end", null)
-
-                        /*
-                         * Android normally ends a recognition session
-                         * after the user stops talking. Immediately
-                         * create another session while the assistant
-                         * remains active.
-                         */
-                        if (desiredListening) {
-                            scheduleRestart(120)
-                        }
-                    }
-
-                    override fun onError(error: Int) {
-                        actualListening = false
-
-                        Log.e(TAG, "onError=$error")
-
-                        com.fixmyphone.ProgressLogger.log(
-                            "STT: ERROR code=$error"
-                        )
-
-                        emit("error", error.toString())
-
-                        if (desiredListening) {
-                            val delay = when (error) {
-                                SpeechRecognizer.ERROR_NO_MATCH -> 150L
-                                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 150L
-                                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 500L
-                                SpeechRecognizer.ERROR_CLIENT -> 500L
-                                SpeechRecognizer.ERROR_NETWORK -> 1200L
-                                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> 1500L
-                                else -> 1000L
-                            }
-
-                            scheduleRestart(delay)
-                        }
-                    }
-
-                    override fun onResults(results: Bundle?) {
-                        actualListening = false
-
-                        val text =
-                            results
-                                ?.getStringArrayList(
-                                    SpeechRecognizer.RESULTS_RECOGNITION
-                                )
-                                ?.firstOrNull()
-
-                        Log.i(TAG, "onResults=$text")
-
-                        if (!text.isNullOrBlank()) {
-                            com.fixmyphone.ProgressLogger.log(
-                                "STT: RESULT: $text"
-                            )
-
-                            emit("results", text)
-                        }
-
-                        if (desiredListening) {
-                            scheduleRestart(100)
-                        }
-                    }
-
-                    override fun onPartialResults(results: Bundle?) {
-                        val text =
-                            results
-                                ?.getStringArrayList(
-                                    SpeechRecognizer.RESULTS_RECOGNITION
-                                )
-                                ?.firstOrNull()
-
-                        if (!text.isNullOrBlank()) {
-                            emit("partial", text)
-                        }
-                    }
-
-                    override fun onEvent(
-                        eventType: Int,
-                        params: Bundle?
-                    ) {}
+                    Log.i(TAG, "onReadyForSpeech session=$mySession")
+                    com.fixmyphone.ProgressLogger.log(
+                        "STT: READY session=$mySession"
+                    )
+                    emit("start", null)
                 }
-            )
 
-            val intent =
-                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE,
-                        locale
-                    )
+                override fun onBeginningOfSpeech() {
+                    if (!isCurrent()) return
 
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
-                        locale
-                    )
-
-                    putExtra(
-                        RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE,
-                        false
-                    )
-
-                    putExtra(
-                        RecognizerIntent.EXTRA_PARTIAL_RESULTS,
-                        true
-                    )
-
-                    putExtra(
-                        RecognizerIntent.EXTRA_MAX_RESULTS,
-                        3
-                    )
-
-                    putExtra(
-                        RecognizerIntent.EXTRA_CALLING_PACKAGE,
-                        ctx.packageName
+                    com.fixmyphone.ProgressLogger.log(
+                        "STT: BEGIN session=$mySession"
                     )
                 }
+
+                override fun onRmsChanged(v: Float) {}
+
+                override fun onBufferReceived(b: ByteArray?) {}
+
+                override fun onEndOfSpeech() {
+                    if (!isCurrent()) return
+
+                    actualListening = false
+
+                    Log.i(TAG, "onEndOfSpeech session=$mySession")
+                    com.fixmyphone.ProgressLogger.log(
+                        "STT: END_OF_SPEECH session=$mySession"
+                    )
+                    emit("end", null)
+
+                    /*
+                     * IMPORTANT:
+                     * Do NOT restart here.
+                     *
+                     * Android normally sends onResults() or onError()
+                     * after onEndOfSpeech(). Restarting here was causing
+                     * overlapping recognizer sessions and ERROR 11.
+                     */
+                }
+
+                override fun onError(error: Int) {
+                    if (mySession != sessionId || destroyed) return
+
+                    actualListening = false
+
+                    Log.e(TAG, "onError=$error session=$mySession")
+                    com.fixmyphone.ProgressLogger.log(
+                        "STT: ERROR code=$error session=$mySession"
+                    )
+                    emit("error", error.toString())
+
+                    if (desiredListening) {
+                        val delay = when (error) {
+                            SpeechRecognizer.ERROR_NO_MATCH -> 250L
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 250L
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1200L
+                            SpeechRecognizer.ERROR_CLIENT -> 800L
+                            SpeechRecognizer.ERROR_NETWORK -> 1500L
+                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> 1800L
+                            else -> 1000L
+                        }
+
+                        terminateCurrentSession(mySession)
+                        scheduleRestart(delay)
+                    }
+                }
+
+                override fun onResults(results: Bundle?) {
+                    if (mySession != sessionId || destroyed) return
+
+                    actualListening = false
+
+                    val text = results
+                        ?.getStringArrayList(
+                            SpeechRecognizer.RESULTS_RECOGNITION
+                        )
+                        ?.firstOrNull()
+                        ?.trim()
+
+                    Log.i(TAG, "onResults=$text session=$mySession")
+
+                    if (!text.isNullOrBlank()) {
+                        com.fixmyphone.ProgressLogger.log(
+                            "STT: RESULT: $text"
+                        )
+                        emit("results", text)
+                    }
+
+                    if (desiredListening) {
+                        terminateCurrentSession(mySession)
+                        scheduleRestart(180L)
+                    }
+                }
+
+                override fun onPartialResults(results: Bundle?) {
+                    if (!isCurrent()) return
+
+                    val text = results
+                        ?.getStringArrayList(
+                            SpeechRecognizer.RESULTS_RECOGNITION
+                        )
+                        ?.firstOrNull()
+                        ?.trim()
+
+                    if (!text.isNullOrBlank()) {
+                        emit("partial", text)
+                    }
+                }
+
+                override fun onEvent(
+                    eventType: Int,
+                    params: Bundle?
+                ) {}
+            })
+
+            val intent = Intent(
+                RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+            ).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE,
+                    locale
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
+                    locale
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE,
+                    false
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_PARTIAL_RESULTS,
+                    true
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_MAX_RESULTS,
+                    3
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_CALLING_PACKAGE,
+                    ctx.packageName
+                )
+            }
 
             com.fixmyphone.ProgressLogger.log(
-                "STT: START_NATIVE locale=$locale attempt=$restartAttempts"
+                "STT: START_NATIVE session=$mySession locale=$locale"
             )
 
-            recognizer?.startListening(intent)
+            sr.startListening(intent)
 
         } catch (e: Exception) {
             actualListening = false
 
-            Log.e(TAG, "startRecognizerNow failed", e)
+            Log.e(TAG, "startRecognizer failed", e)
 
             com.fixmyphone.ProgressLogger.log(
                 "STT: START_FAILED ${e.message}"
@@ -261,8 +263,33 @@ class SpeechToTextModule(
                 "start_failed:${e.message}"
             )
 
+            terminateCurrentSession(mySession)
+
             if (desiredListening) {
-                scheduleRestart(1000)
+                scheduleRestart(1200L)
+            }
+        }
+    }
+
+    private fun terminateCurrentSession(mySession: Long) {
+        if (mySession != sessionId) return
+
+        sessionId++
+
+        actualListening = false
+
+        val old = recognizer
+        recognizer = null
+
+        if (old != null) {
+            mainHandler.post {
+                try {
+                    old.cancel()
+                } catch (_: Throwable) {}
+
+                try {
+                    old.destroy()
+                } catch (_: Throwable) {}
             }
         }
     }
@@ -272,28 +299,16 @@ class SpeechToTextModule(
         if (restartScheduled) return
 
         restartScheduled = true
-        restartAttempts++
-
-        /*
-         * Prevent an endless rapid restart loop if Android's
-         * recognizer is temporarily busy.
-         */
-        val safeDelay =
-            if (restartAttempts >= 5) {
-                2000L
-            } else {
-                delay
-            }
 
         mainHandler.postDelayed({
             restartScheduled = false
 
             if (destroyed || !desiredListening) return@postDelayed
+            if (actualListening) return@postDelayed
+            if (recognizer != null) return@postDelayed
 
-            if (!actualListening) {
-                startRecognizerNow()
-            }
-        }, safeDelay)
+            startRecognizer()
+        }, delay)
     }
 
     @ReactMethod
@@ -302,50 +317,37 @@ class SpeechToTextModule(
             desiredListening = false
             actualListening = false
             restartScheduled = false
-            restartAttempts = 0
+            sessionId++
 
             mainHandler.removeCallbacksAndMessages(null)
 
+            val old = recognizer
+            recognizer = null
+
             try {
-                recognizer?.cancel()
-                recognizer?.destroy()
-                recognizer = null
+                old?.cancel()
+            } catch (_: Throwable) {}
 
-                com.fixmyphone.ProgressLogger.log(
-                    "STT: STOPPED"
-                )
+            try {
+                old?.destroy()
+            } catch (_: Throwable) {}
 
-                promise?.resolve(true)
-            } catch (e: Exception) {
-                promise?.reject(
-                    "STOP_FAILED",
-                    e
-                )
-            }
+            com.fixmyphone.ProgressLogger.log("STT: STOPPED")
+
+            promise?.resolve(true)
         }
     }
 
-    private fun emit(
-        event: String,
-        value: String?
-    ) {
+    private fun emit(event: String, value: String?) {
         val map = Arguments.createMap()
-
-        map.putString(
-            "event",
-            event
-        )
+        map.putString("event", event)
 
         if (value != null) {
-            map.putString(
-                "text",
-                value
-            )
+            map.putString("text", value)
         }
 
         ctx.getJSModule(
-            DeviceEventManagerModule
-                .RCTDeviceEventEmitter::class.java
+            DeviceEventManagerModule.RCTDeviceEventEmitter::class.java
         ).emit(
             "onSpeechEvent",
             map
@@ -356,14 +358,22 @@ class SpeechToTextModule(
         destroyed = true
         desiredListening = false
         actualListening = false
+        restartScheduled = false
+        sessionId++
+
+        mainHandler.removeCallbacksAndMessages(null)
+
+        val old = recognizer
+        recognizer = null
 
         mainHandler.post {
             try {
-                recognizer?.cancel()
-                recognizer?.destroy()
-            } catch (_: Exception) {}
+                old?.cancel()
+            } catch (_: Throwable) {}
 
-            recognizer = null
+            try {
+                old?.destroy()
+            } catch (_: Throwable) {}
         }
 
         super.onCatalystInstanceDestroy()
