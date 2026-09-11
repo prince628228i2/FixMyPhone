@@ -44,7 +44,17 @@ class SpeechToTextModule(
                 return@post
             }
 
-            locale = requestedLocale.ifBlank { "hi-IN" }
+            val requested = requestedLocale.ifBlank { "hi-IN" }
+
+            if (desiredListening) {
+                com.fixmyphone.ProgressLogger.log(
+                    "STT: START_IGNORED_ALREADY_DESIRED actual=$actualListening scheduled=$restartScheduled"
+                )
+                promise.resolve(true)
+                return@post
+            }
+
+            locale = requested
             desiredListening = true
             restartAttempts = 0
 

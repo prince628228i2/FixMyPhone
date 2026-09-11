@@ -71,22 +71,10 @@ function isEcho(text){
  return false;
 }
 
-async function ensureListening(delay=80){
- if(!active||listening)return;
-
- clearTimeout(restartTimer);
-
- restartTimer=setTimeout(async()=>{
-  if(!active||listening)return;
-
-
-  try{
-   progress('STT: RESTART');
-   await startListening('hi-IN');
-  }catch(e){
-   progress('STT: RESTART_FAILED '+String(e?.message||e));
-  }
- },delay);
+async function ensureListening(){
+  // Native SpeechToTextModule owns continuous listening/recovery.
+  // JS must never restart the recognizer after end/error.
+  return;
 }
 
 async function startListeningImmediately(){
@@ -135,7 +123,6 @@ async function say(text){
   if(!speaking)currentTtsText='';
  },700);
 
- if(active)await ensureListening(80);
 }
 
 async function acknowledge(){
@@ -299,8 +286,7 @@ async function processUtterance(text){
   lastSubmitted='';
 
   if(active){
-   await ensureListening(80);
-   await processQueued();
+await processQueued();
   }
  }
 }
@@ -365,8 +351,7 @@ export async function startAssistant(nextMode='fix'){
    listening=false;
 
    if(active){
-    await ensureListening(80);
-   }
+}
 
    return;
   }
@@ -377,10 +362,6 @@ export async function startAssistant(nextMode='fix'){
    progress(
     'STT ERROR: '+String(e.text||'unknown')
    );
-
-   if(active){
-    await ensureListening(180);
-   }
 
    return;
   }
@@ -447,7 +428,6 @@ export async function startAssistant(nextMode='fix'){
 
     if(command===null){
      lastSubmitted='';
-     await ensureListening(80);
      return;
     }
 
@@ -492,7 +472,6 @@ export async function startAssistant(nextMode='fix'){
    : 'Aapke phone mein kya problem hai? Aap mujhe bataiye, main use fix karne ki koshish karti hoon.'
  );
 
- await ensureListening(80);
 }
 
 export async function stopAssistant(){
