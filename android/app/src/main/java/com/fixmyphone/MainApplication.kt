@@ -24,17 +24,7 @@ class MainApplication : Application(), ReactApplication {
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> {
-                // PackageList picks up autolinked JS-side native modules.
-                // Custom native modules are appended here as each part lands.
-                val packages = PackageList(this).packages.toMutableList()
-                packages.add(AccessibilityPackage())
-                packages.add(ExecutorPackage())
-                packages.add(VoicePackage())
-                packages.add(AssistantPackage())
-                packages.add(DevicePackage())
-                packages.add(SafetyPackage())
-                // Voice, device and safety packages are registered here.
-                return packages
+                return PackageList(this).packages
             }
 
             override fun getJSMainModuleName(): String = "index"
