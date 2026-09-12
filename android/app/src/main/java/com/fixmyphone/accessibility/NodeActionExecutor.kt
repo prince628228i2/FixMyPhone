@@ -153,7 +153,24 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
     }
 
     fun toggleWifi(desiredOn: Boolean): String {
-        val root = service.rootInActiveWindow ?: return "failed"
+        var root = service.rootInActiveWindow
+        if (root != null) {
+            try {
+                val result = findAndToggleWifi(root, desiredOn)
+                if (result == "executed") return result
+            } finally {
+                root.recycle()
+            }
+        }
+
+        val opened = service.performGlobalAction(
+            AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
+        )
+        if (!opened) return "failed"
+
+        Thread.sleep(350)
+
+        root = service.rootInActiveWindow ?: return "failed"
         return try {
             findAndToggleWifi(root, desiredOn)
         } finally {
@@ -171,8 +188,9 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
 
         val relevant =
             text.contains("wi-fi") || text.contains("wifi") ||
-            text.contains("internet") || desc.contains("wi-fi") ||
-            desc.contains("wifi") || desc.contains("internet") ||
+            text.contains("internet") ||
+            desc.contains("wi-fi") || desc.contains("wifi") ||
+            desc.contains("internet") ||
             id.contains("wifi") || id.contains("internet")
 
         if (relevant) {
@@ -187,7 +205,18 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
                     tapAtNodeCenter(node)
             }
 
-            if (clicked) return "executed"
+            if (clicked) {
+                Thread.sleep(350)
+                val nowRoot = service.rootInActiveWindow
+                if (nowRoot != null) {
+                    try {
+                        if (containsWifiDesiredState(nowRoot, desiredOn)) return "executed"
+                    } finally {
+                        nowRoot.recycle()
+                    }
+                }
+                return "requires_user"
+            }
         }
 
         for (i in 0 until node.childCount) {
@@ -197,10 +226,44 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
             } finally {
                 child.recycle()
             }
-            if (result == "executed") return result
+            if (result == "executed" || result == "requires_user") return result
         }
 
         return "requires_user"
+    }
+
+    private fun containsWifiDesiredState(
+        node: AccessibilityNodeInfo,
+        desiredOn: Boolean
+    ): Boolean {
+        val text = node.text?.toString()?.lowercase() ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+        val id = node.viewIdResourceName?.lowercase() ?: ""
+
+        val relevant =
+            text.contains("wi-fi") || text.contains("wifi") ||
+            text.contains("internet") ||
+            desc.contains("wi-fi") || desc.contains("wifi") ||
+            desc.contains("internet") ||
+            id.contains("wifi") || id.contains("internet")
+
+        if (relevant) {
+            if (node.isCheckable && node.isChecked == desiredOn) return true
+            val state = "$text $desc"
+            if (desiredOn && (state.contains("on") || state.contains("connected") || state.contains("enabled"))) return true
+            if (!desiredOn && (state.contains("off") || state.contains("disabled") || state.contains("disconnected"))) return true
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = try {
+                containsWifiDesiredState(child, desiredOn)
+            } finally {
+                child.recycle()
+            }
+            if (found) return true
+        }
+        return false
     }
 
     fun globalAction(action: String): String {
