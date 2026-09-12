@@ -26,6 +26,7 @@ let wakeArmed=false;
 let speaking=false;
 let currentTtsText='';
 let pendingUtterances=[];
+let pendingTask=null;
 
 const WAKE_WORD=/\bedith\b/i;
 
@@ -79,13 +80,7 @@ async function ensureListening(){
 
 async function startListeningImmediately(){
  if(!active)return;
-
- try{
-  progress('STT: PARALLEL_START');
-  await startListening('hi-IN');
- }catch(e){
-  progress('STT: PARALLEL_START_FAILED '+String(e?.message||e));
- }
+ progress('STT: CONTINUOUS_NATIVE_OWNER');
 }
 
 async function say(text){
@@ -165,8 +160,11 @@ async function processQueued(){
 }
 
 async function processUtterance(text){
- const goal=String(text||'').trim();
-
+ const answer=String(text||'').trim();
+ if(!answer||!active)return;
+ const baseGoal=pendingTask?.originalGoal||answer;
+ const goal=pendingTask ? baseGoal+'\nUser answered: '+answer : answer;
+ const key=normalize(answer);
  if(!goal||!active)return;
 
  const key=normalize(goal);
@@ -212,7 +210,7 @@ async function processUtterance(text){
  console.log('[FixMyPhone][PROGRESS] INPUT: '+goal);
  progress('INPUT: '+goal);
 
- ConversationContext.set({lastUserUtterance:goal});
+ ConversationContext.set({lastUserUtterance:answer,pendingTask:pendingTask?.originalGoal||null});
 
  useAgentStore.getState().addTranscript({
   role:'user',
@@ -252,7 +250,8 @@ async function processUtterance(text){
 
   progress('AGENT RESULT: '+JSON.stringify(result));
 
-  if(result.status==='success'&&!result.assistantReply){
+  if(result.status==='success'){
+   pendingTask=null;
    await say(
     mode==='24x7'
      ? 'Ho gaya Sir. Main yahin hoon.'
@@ -265,11 +264,13 @@ async function processUtterance(text){
    }
   }
 
-  if(result.status==='needs_input'&&!result.assistantReply){
-   await say('Sir, ek chhoti si information chahiye.');
+  if(result.status==='needs_input'){
+   if(!pendingTask){ pendingTask={originalGoal:answer,createdAt:Date.now()}; progress('PENDING TASK SAVED: '+answer); }
+   if(!result.assistantReply){ await say('Sir, ek chhoti si information chahiye.'); }
   }
 
   if(result.status==='failed'){
+   pendingTask=null;
    await say('Sir, main screen dobara check karke try karti hoon.');
   }
 
@@ -316,6 +317,7 @@ export async function startAssistant(nextMode='fix'){
  lastPartial='';
  confirmationResolver=null;
  pendingUtterances=[];
+ pendingTask=null;
 
  clearTimeout(restartTimer);
  clearTimeout(acknowledgementTimer);
@@ -487,6 +489,7 @@ export async function stopAssistant(){
   currentTtsText='';
  confirmationResolver=null;
  pendingUtterances=[];
+ pendingTask=null;
 
  clearTimeout(restartTimer);
  clearTimeout(acknowledgementTimer);
