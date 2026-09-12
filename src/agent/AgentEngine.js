@@ -15,7 +15,7 @@ export async function runAgent(goal,{confirmAction,conversation,onAssistantReply
  const store=useAgentStore.getState(); store.set({task:goal,status:'PLANNING',lastError:null,stopRequested:false}); console.log('[FixMyPhone][PROGRESS] AGENT: PLANNING: '+goal); progress('AGENT: PLANNING: '+goal);
  const started=Date.now();
  try {
-  console.log('[FixMyPhone][PROGRESS] AGENT: OBSERVING'); progress('AGENT: OBSERVING'); let snap=await observe(); console.log('[FixMyPhone][PROGRESS] AGENT: PLANNING'); progress('AGENT: PLANNING'); let plan=await planTask(goal,snap,conversation);
+  console.log('[FixMyPhone][PROGRESS] AGENT: OBSERVING'); progress('AGENT: OBSERVING'); let snap=await observe(); progress('DIAG: SCREEN_SNAPSHOT_BEFORE '+JSON.stringify(snap).slice(0,12000)); console.log('[FixMyPhone][PROGRESS] AGENT: PLANNING'); progress('AGENT: PLANNING'); progress('DIAG: AI_REQUEST_START goal='+JSON.stringify(goal)+' conversation='+JSON.stringify(conversation).slice(0,8000)); let plan; try { plan=await planTask(goal,snap,conversation); progress('DIAG: AI_RESPONSE_RECEIVED'); progress('DIAG: AI_PLAN_RESPONSE '+JSON.stringify(plan).slice(0,16000)); } catch(e) { progress('DIAG: AI_REQUEST_FAILED '+String(e?.message||e)); throw e; }
 progress('DIAG: SCREEN_SNAPSHOT_BEFORE '+JSON.stringify(snap).slice(0,12000));
 progress('DIAG: AI_PLAN '+JSON.stringify(plan).slice(0,12000));
 const pv=validatePlan(plan);
