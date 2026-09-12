@@ -287,6 +287,11 @@ async function processUtterance(text){
   if(result.status==='failed'){
    pendingTask=null;
    await say('Sir, main screen dobara check karke try karti hoon.');
+   if(mode==='fix'){
+    progress('DIAG: FIX_MODE_FAILURE_STOP');
+    await stopAssistant();
+    return;
+   }
   }
 
  }catch(e){
