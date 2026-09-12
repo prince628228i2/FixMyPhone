@@ -78,7 +78,7 @@ async function ensureListening(){
 }
 
 async function startListeningImmediately(){
- if(!active||listening)return;
+ if(!active)return;
 
  try{
   progress('STT: PARALLEL_START');

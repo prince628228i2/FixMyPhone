@@ -40,9 +40,18 @@ class SpeechToTextModule(
             }
 
             if (desiredListening) {
+                if (actualListening || recognizer != null || restartScheduled) {
+                    com.fixmyphone.ProgressLogger.log(
+                        "STT: START_IGNORED already_active actual=$actualListening recognizer=${recognizer != null} restart=$restartScheduled"
+                    )
+                    promise.resolve(true)
+                    return@post
+                }
+
                 com.fixmyphone.ProgressLogger.log(
-                    "STT: START_IGNORED already_active actual=$actualListening restart=$restartScheduled"
+                    "STT: START_RECOVERY desired=true actual=false recognizer=false"
                 )
+                startRecognizer()
                 promise.resolve(true)
                 return@post
             }
