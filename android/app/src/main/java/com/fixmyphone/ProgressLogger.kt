@@ -4,6 +4,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -11,6 +13,7 @@ import java.util.Locale
 object ProgressLogger {
     @Volatile private var initialized = false
     private var context: Context? = null
+    private var reactContext: ReactApplicationContext? = null
     private val lock = Any()
 
     fun install(ctx: Context) {
@@ -24,9 +27,28 @@ object ProgressLogger {
         }
     }
 
+    fun attachReactContext(ctx: ReactApplicationContext) {
+        synchronized(lock) {
+            reactContext = ctx
+        }
+    }
+
+    fun detachReactContext() {
+        synchronized(lock) {
+            reactContext = null
+        }
+    }
+
     fun log(message: String) {
         if (!initialized) return
         write(message)
+        try {
+            reactContext
+                ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                ?.emit("FixMyPhoneProgress", message)
+        } catch (_: Throwable) {
+            // Live diagnostics must never crash the app.
+        }
     }
 
     private fun write(message: String) {
@@ -79,22 +101,10 @@ object ProgressLogger {
 
                 if (uri == null) {
                     val values = ContentValues().apply {
-                        put(
-                            MediaStore.Downloads.DISPLAY_NAME,
-                            "FixMyPhone_diagnostic.txt"
-                        )
-                        put(
-                            MediaStore.Downloads.MIME_TYPE,
-                            "text/plain"
-                        )
-                        put(
-                            MediaStore.Downloads.RELATIVE_PATH,
-                            Environment.DIRECTORY_DOWNLOADS
-                        )
-                        put(
-                            MediaStore.Downloads.IS_PENDING,
-                            1
-                        )
+                        put(MediaStore.Downloads.DISPLAY_NAME, "FixMyPhone_diagnostic.txt")
+                        put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                        put(MediaStore.Downloads.IS_PENDING, 1)
                     }
 
                     uri = resolver.insert(
@@ -108,10 +118,7 @@ object ProgressLogger {
                         }
 
                         values.clear()
-                        values.put(
-                            MediaStore.Downloads.IS_PENDING,
-                            0
-                        )
+                        values.put(MediaStore.Downloads.IS_PENDING, 0)
                         resolver.update(uri, values, null, null)
                     }
 
