@@ -59,8 +59,8 @@ class TextToSpeechModule(
 
         engine.voice = female ?: indian ?: preferred.firstOrNull() ?: engine.defaultVoice
 
-        engine.setSpeechRate(1.3f)
-        engine.setPitch(1.04f)
+        engine.setSpeechRate(1.1f)
+        engine.setPitch(0.88f)
 
         com.fixmyphone.ProgressLogger.log("TTS: READY speed=1.3x voice=${engine.voice?.name}")
 
