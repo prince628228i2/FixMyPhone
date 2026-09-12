@@ -52,7 +52,7 @@ object ProgressLogger {
                     "${MediaStore.Downloads.RELATIVE_PATH}=?"
 
                 val args = arrayOf(
-                    "FixMyPhone_progress.txt",
+                    "FixMyPhone_diagnostic.txt",
                     "${Environment.DIRECTORY_DOWNLOADS}/"
                 )
 
@@ -80,7 +80,7 @@ object ProgressLogger {
                     val values = ContentValues().apply {
                         put(
                             MediaStore.Downloads.DISPLAY_NAME,
-                            "FixMyPhone_progress.txt"
+                            "FixMyPhone_diagnostic.txt"
                         )
                         put(
                             MediaStore.Downloads.MIME_TYPE,

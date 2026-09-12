@@ -152,6 +152,57 @@ class NodeActionExecutor(private val service: FixMyPhoneAccessibilityService) {
         return dispatchGestureSync(gesture)
     }
 
+    fun toggleWifi(desiredOn: Boolean): String {
+        val root = service.rootInActiveWindow ?: return "failed"
+        return try {
+            findAndToggleWifi(root, desiredOn)
+        } finally {
+            root.recycle()
+        }
+    }
+
+    private fun findAndToggleWifi(
+        node: AccessibilityNodeInfo,
+        desiredOn: Boolean
+    ): String {
+        val text = node.text?.toString()?.lowercase() ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+        val id = node.viewIdResourceName?.lowercase() ?: ""
+
+        val relevant =
+            text.contains("wi-fi") || text.contains("wifi") ||
+            text.contains("internet") || desc.contains("wi-fi") ||
+            desc.contains("wifi") || desc.contains("internet") ||
+            id.contains("wifi") || id.contains("internet")
+
+        if (relevant) {
+            if (node.isCheckable && node.isChecked == desiredOn) return "executed"
+
+            val clicked = when {
+                node.isClickable ->
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                node.parent?.isClickable == true ->
+                    node.parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                else ->
+                    tapAtNodeCenter(node)
+            }
+
+            if (clicked) return "executed"
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = try {
+                findAndToggleWifi(child, desiredOn)
+            } finally {
+                child.recycle()
+            }
+            if (result == "executed") return result
+        }
+
+        return "requires_user"
+    }
+
     fun globalAction(action: String): String {
         val global = when (action.uppercase()) {
             "BACK" -> AccessibilityService.GLOBAL_ACTION_BACK

@@ -22,7 +22,8 @@ class AccessibilityActionHandler : ActionHandler {
         ActionType.SWIPE,
         ActionType.BACK,
         ActionType.HOME,
-        ActionType.RECENTS
+        ActionType.RECENTS,
+        ActionType.TOGGLE_WIFI
     )
 
     override fun canHandle(action: ActionType): Boolean = action in handledTypes
@@ -40,6 +41,9 @@ class AccessibilityActionHandler : ActionHandler {
             ActionType.SCROLL -> executor.scroll(action.params["direction"] as? String)
             ActionType.SWIPE -> executor.swipe(action.params["direction"] as? String)
             ActionType.BACK, ActionType.HOME, ActionType.RECENTS -> executor.globalAction(action.action.name)
+            ActionType.TOGGLE_WIFI -> executor.toggleWifi(
+                action.params["state"]?.toString()?.lowercase() == "on"
+            )
             else -> "failed"
         }
     }
