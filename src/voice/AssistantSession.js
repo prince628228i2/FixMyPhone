@@ -97,7 +97,8 @@ async function startListeningImmediately(){
  }
 }
 
-async function say(text){
+async function say(text,options={}){
+ const listen=options.listen!==false;
  if(!text||!active)return;
 
  clearTimeout(acknowledgementTimer);
@@ -114,7 +115,7 @@ async function say(text){
   * STT is deliberately started BEFORE waiting for TTS.
   * Therefore microphone recognition and TTS run together.
   */
- await startListeningImmediately();
+ if(listen){ await startListeningImmediately(); }
 
  try{
   await speak(text);
@@ -286,12 +287,16 @@ async function processUtterance(text){
 
   if(result.status==='failed'){
    pendingTask=null;
-   await say('Sir, main screen dobara check karke try karti hoon.');
    if(mode==='fix'){
+    progress('DIAG: FIX_MODE_FAILURE_STT_STOP');
+    try{ await stopListening(); }catch(e){}
+    sttStarted=false;
+    await say('Sir, main screen dobara check karke try karti hoon.',{listen:false});
     progress('DIAG: FIX_MODE_FAILURE_STOP');
     await stopAssistant();
     return;
    }
+   await say('Sir, main screen dobara check karke try karti hoon.');
   }
 
  }catch(e){

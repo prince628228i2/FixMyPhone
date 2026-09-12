@@ -62,7 +62,7 @@ class TextToSpeechModule(
         engine.setSpeechRate(1.1f)
         engine.setPitch(0.88f)
 
-        com.fixmyphone.ProgressLogger.log("TTS: READY speed=1.3x voice=${engine.voice?.name}")
+        com.fixmyphone.ProgressLogger.log("TTS: READY speed=1.1x pitch=0.88 voice=${engine.voice?.name}")
 
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {

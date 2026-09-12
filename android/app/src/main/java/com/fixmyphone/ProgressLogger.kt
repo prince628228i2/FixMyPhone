@@ -44,7 +44,8 @@ object ProgressLogger {
                 val resolver = ctx.contentResolver
 
                 val projection = arrayOf(
-                    MediaStore.Downloads._ID
+                    MediaStore.Downloads._ID,
+                    MediaStore.Downloads.IS_PENDING
                 )
 
                 val selection =
@@ -61,7 +62,7 @@ object ProgressLogger {
                     projection,
                     selection,
                     args,
-                    null
+                    "${MediaStore.Downloads._ID} ASC"
                 )?.use { cursor ->
                     if (cursor.moveToFirst()) {
                         val id = cursor.getLong(
