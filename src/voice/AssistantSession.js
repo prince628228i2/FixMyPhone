@@ -27,6 +27,7 @@ let speaking=false;
 let currentTtsText='';
 let pendingUtterances=[];
 let pendingTask=null;
+let sttStarted=false;
 
 const WAKE_WORD=/\bedith\b/i;
 
@@ -80,7 +81,20 @@ async function ensureListening(){
 
 async function startListeningImmediately(){
  if(!active)return;
- progress('STT: CONTINUOUS_NATIVE_OWNER');
+ if(sttStarted){
+  progress('STT: BOOTSTRAP_ALREADY_DONE');
+  return;
+ }
+ try{
+  progress('DIAG: STT_BOOTSTRAP_START');
+  await startListening('hi-IN');
+  sttStarted=true;
+  progress('DIAG: STT_BOOTSTRAP_SUCCESS');
+ }catch(e){
+  sttStarted=false;
+  progress('DIAG: STT_BOOTSTRAP_FAILED '+String(e?.message||e));
+  throw e;
+ }
 }
 
 async function say(text){
@@ -92,6 +106,7 @@ async function say(text){
  speaking=true;
 
  console.log('[FixMyPhone][TTS]',text);
+ progress('DIAG: TTS_REQUEST '+text);
  progress('TTS: '+text);
 
  /*
@@ -218,6 +233,7 @@ async function processUtterance(text){
  });
 
  try{
+  progress('DIAG: AGENT_INPUT_READY '+goal);
   progress('ACKNOWLEDGEMENT');
   await say(await acknowledge());
 
@@ -304,6 +320,7 @@ export async function startAssistant(nextMode='fix'){
  mode=nextMode;
 
  console.log('[FixMyPhone][PROGRESS] ASSISTANT ACTIVE mode='+nextMode);
+ progress('DIAG: ASSISTANT_START_REQUEST mode='+nextMode);
  progress('ASSISTANT ACTIVE mode='+nextMode);
 
  wakeArmed=(nextMode==='24x7');
@@ -317,6 +334,7 @@ export async function startAssistant(nextMode='fix'){
  confirmationResolver=null;
  pendingUtterances=[];
  pendingTask=null;
+ sttStarted=false;
 
  clearTimeout(restartTimer);
  clearTimeout(acknowledgementTimer);
@@ -325,7 +343,9 @@ export async function startAssistant(nextMode='fix'){
  useAgentStore.getState().reset();
 
  try{
+  progress('DIAG: NATIVE_ASSISTANT_START');
   await AssistantBridge?.startAssistant?.(mode);
+  progress('DIAG: NATIVE_ASSISTANT_STARTED');
  }catch(e){
   active=false;
   wakeArmed=false;
@@ -340,6 +360,7 @@ export async function startAssistant(nextMode='fix'){
    JSON.stringify(e)
   );
 
+  progress('DIAG: VOICE_EVENT '+JSON.stringify(e));
   progress('STT EVENT: '+JSON.stringify(e));
 
   if(e.event==='start'){
@@ -479,6 +500,7 @@ export async function stopAssistant(){
  active=false;
 
  console.log('[FixMyPhone][PROGRESS] ASSISTANT STOPPED');
+ progress('DIAG: ASSISTANT_STOPPED');
  progress('ASSISTANT STOPPED');
 
  wakeArmed=false;
@@ -489,6 +511,7 @@ export async function stopAssistant(){
  confirmationResolver=null;
  pendingUtterances=[];
  pendingTask=null;
+ sttStarted=false;
 
  clearTimeout(restartTimer);
  clearTimeout(acknowledgementTimer);
