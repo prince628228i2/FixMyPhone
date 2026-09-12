@@ -167,26 +167,25 @@ async function processUtterance(text){
  const key=normalize(answer);
  if(!goal||!active)return;
 
- const key=normalize(goal);
 
  if(!key)return;
 
  if(key===lastSubmitted)return;
 
- if(isEcho(goal)){
+ if(isEcho(answer)){
   progress('STT: ECHO_IGNORED '+goal);
   return;
  }
 
  if(confirmationResolver){
-  if(isYes(goal)){
+  if(isYes(answer)){
    const r=confirmationResolver;
    confirmationResolver=null;
    r(true);
    return;
   }
 
-  if(isNo(goal)){
+  if(isNo(answer)){
    const r=confirmationResolver;
    confirmationResolver=null;
    r(false);
@@ -194,13 +193,13 @@ async function processUtterance(text){
   }
  }
 
- if(isSmallTalk(goal)){
-  await say('Ji Sir, main sun rahi hoon.');
+ if(processing){
+  queueUtterance(answer);
   return;
  }
 
- if(processing){
-  queueUtterance(goal);
+ if(!pendingTask && isSmallTalk(answer)){
+  await say('Ji Sir, main sun rahi hoon.');
   return;
  }
 
